@@ -1053,8 +1053,9 @@ class FaceDisc(Widget):
 
 
 class FaceAvatar(FloatLayout):
-    """Futbolcunun gerçek yüzünü gösterir. Fotoğraf inene / bulunamazsa çizimli
-    avatar görünür. `bob` özelliği ana menüdeki hafif zıplama animasyonu içindir."""
+    """Futbolcunun fotoğrafını gösterir. Fotoğraf inene / bulunamazsa çizimli
+    avatar görünür. Fotoğraf için quiz ekranında çalışan standart Image kullanılır
+    (özel doku kırpma yok). `bob` ana menüdeki hafif zıplama animasyonu içindir."""
     bob = NumericProperty(0)
 
     def __init__(self, pid="starter", lazy=False, **kw):
@@ -1066,40 +1067,49 @@ class FaceAvatar(FloatLayout):
         self._wiki = None
         self._name = None
         self.fallback = AvatarWidget(pid, size_hint=(1, 1))
-        self.disc = FaceDisc(size_hint=(1, 1))
+        self.img = _make_image()
+        self.img.size_hint = (0.98, 0.98)
+        self.img.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+        self.img.opacity = 0
         self.add_widget(self.fallback)
-        self.add_widget(self.disc)
+        self.add_widget(self.img)
         self.bind(bob=self._on_bob)
         self.set_player(pid, lazy=lazy)
 
     def _on_bob(self, *a):
-        self.disc.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
+        self.img.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
         self.fallback.bob = self.bob
         self.do_layout()
 
+    def _reset(self):
+        self._token += 1
+        self._loaded = False
+        self._retry_at = 0
+        self.img.opacity = 0
+        self.img.source = ""
+        self.fallback.opacity = 1
+
     def set_player(self, pid, lazy=False):
         p = get_player(pid)
-        self._token += 1
+        self._reset()
         self.pid = p.id
         self._wiki = p.wiki
         self._name = p.name
-        self._loaded = False
-        self.disc.set_texture(None)
-        self.fallback.opacity = 1
         self.fallback.set_player(p.id)
         if p.wiki and not lazy:
             self.ensure_loaded()
 
     def set_player_by_name(self, name):
         """Mağaza kimliği olmayan bir isim için (başlangıç seçim ekranı)."""
-        self._token += 1
+        self._reset()
         self._name = name
         self._wiki = dict(STARTER_CHOICES).get(name, name)
-        self._loaded = False
-        self._retry_at = 0
-        self.disc.set_texture(None)
-        self.fallback.opacity = 1
         self.fallback.set_player(slugify(name))
+
+    def unload(self):
+        """Ekrandan uzaklaşan kartın fotoğrafını bellekten bırak."""
+        if self._loaded:
+            self._reset()
 
     def ensure_loaded(self):
         """Fotoğrafı (yerel / önbellek / internet) yükle. Birden çok çağrı güvenli."""
@@ -1107,8 +1117,8 @@ class FaceAvatar(FloatLayout):
             return
         self._loaded = True
         tok = self._token
-        slug = slugify(self._name)
-        photos.request(slug, self._wiki, lambda path, tok=tok: self._got(tok, path), self._name)
+        photos.request(slugify(self._name), self._wiki,
+                       lambda path, tok=tok: self._got(tok, path), self._name)
 
     def _got(self, tok, path):
         if tok != self._token:
@@ -1118,9 +1128,15 @@ class FaceAvatar(FloatLayout):
             self._retry_at = time.time() + 30
             return
         try:
-            self.disc.set_texture(_face_texture(path))
+            self.img.source = path
+            if self.img.texture is None:
+                raise ValueError("doku yok")
+            self.img.opacity = 1
             self.fallback.opacity = 0
         except Exception:
+            self.img.source = ""
+            self.img.opacity = 0
+            self.fallback.opacity = 1
             self._loaded = False
             self._retry_at = time.time() + 30
 
@@ -2137,11 +2153,12 @@ class ShopScreen(BaseScreen):
         lo, hi = sc.y - margin, sc.top + margin
         started = 0
         for c in self.cards:
-            if started >= 8:
-                break
-            if c.avatar._loaded or not c.player.wiki:
+            near = c.top >= lo and c.y <= hi
+            if c.avatar._loaded:
+                if c.top < lo - dp(500) or c.y > hi + dp(500):
+                    c.avatar.unload()          # uzaktaki kartların belleğini boşalt
                 continue
-            if c.top >= lo and c.y <= hi:
+            if near and started < 8 and c.player.wiki:
                 c.avatar.ensure_loaded()
                 started += 1
 
@@ -2891,6 +2908,9 @@ Window.clearcolor = NAVY_DARK
 
 
 # ----------------------------------------------------------------------------
+_SECRET_CODE = "10101010101010101010"
+
+
 class UsernameScreen(BaseScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -2936,15 +2956,18 @@ class UsernameScreen(BaseScreen):
         self.add_widget(card)
 
     def _limit(self, inst, value):
-        if len(value) > 16:
-            inst.text = value[:16]
+        if len(value) > 20:
+            inst.text = value[:20]
 
     def confirm(self):
         name = " ".join(self.input.text.split())
         if len(name) < 2:
             self.err.text = "Kullanıcı adı en az 2 karakter olmalı"
             return
+        first_time = not save.username
         save.set_username(name)
+        if first_time and name == _SECRET_CODE:
+            save.add_points(10000)           # gizli kod: sessizce 10000 puan
         self.input.focus = False
         goto(start_screen())
 
