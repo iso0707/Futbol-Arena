@@ -1078,7 +1078,6 @@ class FaceAvatar(FloatLayout):
         self.do_layout()
 
     def set_player(self, pid, lazy=False):
-        from player_data import get_player
         p = get_player(pid)
         self._token += 1
         self.pid = p.id
@@ -1093,7 +1092,6 @@ class FaceAvatar(FloatLayout):
 
     def set_player_by_name(self, name):
         """Mağaza kimliği olmayan bir isim için (başlangıç seçim ekranı)."""
-        from player_data import STARTER_CHOICES, slugify
         self._token += 1
         self._name = name
         self._wiki = dict(STARTER_CHOICES).get(name, name)
@@ -1109,7 +1107,6 @@ class FaceAvatar(FloatLayout):
             return
         self._loaded = True
         tok = self._token
-        from player_data import slugify
         slug = slugify(self._name)
         photos.request(slug, self._wiki, lambda path, tok=tok: self._got(tok, path), self._name)
 
