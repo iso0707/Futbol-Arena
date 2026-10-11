@@ -30,7 +30,7 @@ from save_system import save
 from shop_system import ShopScreen
 from ui_system import (BarWidget, BaseScreen, FaceAvatar, GOLD, GREEN, GREEN_DARK,
                        HeaderBar, NAVY_DARK, NAVY_LIGHT, RED, RoundedButton, TLabel,
-                       goto, photos, play_music, stop_music)
+                       goto, music_status, photos, play_music, stop_music)
 
 Window.softinput_mode = "below_target"       # klavye açılınca giriş kutusu görünür kalsın
 Window.clearcolor = NAVY_DARK
@@ -133,6 +133,9 @@ class MenuScreen(BaseScreen):
         self.stats_lbl = TLabel(text="", halign="center", font_size=sp(13),
                                 color=(1, 1, 1, 0.75), size_hint_y=None, height=dp(34))
         right.add_widget(self.stats_lbl)
+        self.music_lbl = TLabel(text="", halign="center", font_size=sp(11),
+                                color=(1, 1, 1, 0.45), size_hint_y=None, height=dp(20))
+        right.add_widget(self.music_lbl)
         root.add_widget(left)
         root.add_widget(right)
         self.add_widget(root)
@@ -214,6 +217,10 @@ class FootballApp(App):
             play_music(*names)
         else:
             stop_music()
+        try:
+            self.sm.get_screen("menu").music_lbl.text = music_status()
+        except Exception:
+            pass
 
     def _on_keyboard(self, window, key, *args):
         if key == 27:                          # Android geri tuşu / ESC

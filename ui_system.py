@@ -65,12 +65,42 @@ _SOUND_DIRS = [os.path.join(_BASE_DIR, "sounds"), asset_path("sounds"),
                os.path.join(_BASE_DIR, "music"), asset_path("music")]
 
 
+_EFFECTS = ("buy", "correct", "goal", "save", "wrong")
+_EXTS = (".mp3", ".ogg", ".wav")
+
+
+def _audio_files():
+    """Ses klasörlerindeki tüm ses dosyaları: [(klasör, dosya_adı), ...]"""
+    out = []
+    for d in _SOUND_DIRS:
+        try:
+            for f in sorted(os.listdir(d)):
+                if f.lower().endswith(_EXTS):
+                    out.append((d, f))
+        except OSError:
+            pass
+    return out
+
+
 def find_sound(name):
     for d in _SOUND_DIRS:
         for ext in ("mp3", "ogg", "wav"):
             p = os.path.join(d, "%s.%s" % (name, ext))
             if os.path.isfile(p):
                 return p
+    # büyük/küçük harf farkı (Music.MP3 gibi) için
+    for d, f in _audio_files():
+        if os.path.splitext(f)[0].lower() == name.lower():
+            return os.path.join(d, f)
+    return None
+
+
+def _extra_music():
+    """music.mp3 yoksa: efekt olmayan ilk ses dosyasını genel müzik say."""
+    for d, f in _audio_files():
+        stem = os.path.splitext(f)[0].lower()
+        if stem not in _EFFECTS:
+            return os.path.splitext(f)[0], os.path.join(d, f)
     return None
 
 
@@ -92,8 +122,12 @@ def play_sound(name):
 
 
 # -- arka plan müziği --------------------------------------------------------
-_music = {"name": None, "snd": None}
+_music = {"name": None, "snd": None, "status": "Müzik: henüz başlamadı"}
 MUSIC_VOLUME = 0.45
+
+
+def music_status():
+    return _music["status"]
 
 
 def stop_music():
@@ -111,25 +145,37 @@ def play_music(*names):
     """Verilen isimlerden dosyası olan İLK müziği döngüde çalar.
     Zaten o müzik çalıyorsa yeniden başlatmaz. Hiçbiri yoksa sessiz kalır."""
     try:
+        cand = None
         for n in names:
             path = find_sound(n)
-            if not path:
-                continue
-            if _music["name"] == n and _music["snd"]:
-                return
+            if path:
+                cand = (n, path)
+                break
+        if cand is None and "music" in names:
+            cand = _extra_music()
+        if cand is None:
             stop_music()
-            from kivy.core.audio import SoundLoader
-            snd = SoundLoader.load(path)
-            if snd:
-                snd.loop = True
-                snd.volume = MUSIC_VOLUME
-                snd.play()
-                _music["name"] = n
-                _music["snd"] = snd
+            files = [f for _, f in _audio_files()]
+            _music["status"] = ("Müzik dosyası yok. sounds klasöründe: " +
+                                (", ".join(files) if files else "ses dosyası yok"))
+            return
+        n, path = cand
+        if _music["name"] == n and _music["snd"]:
             return
         stop_music()
-    except Exception:
-        pass
+        from kivy.core.audio import SoundLoader
+        snd = SoundLoader.load(path)
+        if not snd:
+            _music["status"] = "Müzik yüklenemedi (format?): " + os.path.basename(path)
+            return
+        snd.loop = True
+        snd.volume = MUSIC_VOLUME
+        snd.play()
+        _music["name"] = n
+        _music["snd"] = snd
+        _music["status"] = "Müzik çalıyor: " + os.path.basename(path)
+    except Exception as e:
+        _music["status"] = "Müzik hata: %s" % (str(e)[:60],)
 
 
 # ----------------------------------------------------------------------------
