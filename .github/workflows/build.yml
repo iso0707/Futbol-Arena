@@ -1,0 +1,49 @@
+I'll retrieve the job logs to identify the failure and find a solution.Now let me check the Dockerfile and workflow configuration:## Problem
+
+The Docker build is failing because the PPA (Personal Package Archive) for OpenJDK is returning a **404 Not Found** error for the "resolute" Ubuntu release. The repository doesn't have a Release file for this distribution, causing `apt update` to fail.
+
+The issue is in the Dockerfile used by the `ArtemSBulgakov/buildozer-action@v1` action. It's trying to use an OpenJDK PPA that doesn't support the current Ubuntu release.
+
+## Solution
+
+You have a few options to fix this:
+
+### Option 1: Use a Different Buildozer Action (Recommended)
+Consider using a more recently maintained buildozer action or switch to a different build approach that doesn't rely on outdated PPAs.
+
+### Option 2: Specify a Compatible Ubuntu Version
+Modify your workflow to use an Ubuntu version that the OpenJDK PPA supports:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-22.04  # Try an LTS version instead of latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+```
+
+### Option 3: Create a Custom Dockerfile
+If you have control over the build environment, create a custom Dockerfile that installs Java from the default Ubuntu repositories instead of using the PPA:
+
+```dockerfile
+RUN sudo apt-get update && \
+    sudo apt-get install -y openjdk-17-jdk-headless && \
+    sudo apt-get clean
+```
+
+This avoids the problematic PPA entirely by using the standard Ubuntu package repositories.
+
+### Option 4: Update the Buildozer Action
+Check if there's a newer version of the buildozer action available, as the current `v1` may have outdated dependencies:
+
+```yaml
+uses: ArtemSBulgakov/buildozer-action@v2  # Or check for latest
+```
+
+**Start with Option 1 or Option 2** as they're the quickest fixes. If the issue persists, Option 3 provides the most control over your dependencies.
