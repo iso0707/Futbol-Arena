@@ -9,12 +9,13 @@ from kivy.uix.boxlayout import BoxLayout
 
 from player_data import EASY_POOL, HARD_POOL
 from save_system import save
-from ui_system import (BarWidget, BaseScreen, GOLD_DARK, GREEN, GREEN_DARK, GOLD,
+from ui_system import (BarWidget, toast, BaseScreen, GOLD_DARK, GREEN, GREEN_DARK, GOLD,
                        NAVY_LIGHT, Overlay, PlayerPhoto, RED, RoundedButton, TLabel,
                        WHITE, goto, photos, play_sound)
 from kivy.app import App
 
 STREAK_GOAL = 25
+JOKERS_PER_GAME = 3
 Question = namedtuple("Question", "player options correct")
 
 
@@ -84,6 +85,8 @@ class QuizScreen(BaseScreen):
         self._ready_token = -1
         self._events = []
         self.overlay = None
+        self.jokers = JOKERS_PER_GAME
+        self.joker_used_q = False
 
         root = BoxLayout(orientation="horizontal",
                          padding=[dp(18), dp(70), dp(18), dp(14)], spacing=dp(18))
@@ -114,10 +117,44 @@ class QuizScreen(BaseScreen):
         root.add_widget(right)
         self.add_widget(root)
 
-        back = RoundedButton(text="GERİ", bg=NAVY_LIGHT, size_hint=(None, None),
-                             size=(dp(100), dp(44)), pos_hint={"right": 0.99, "top": 0.985})
+        topright = BoxLayout(orientation="horizontal", spacing=dp(10), size_hint=(None, None),
+                             size=(dp(270), dp(44)),
+                             pos_hint={"right": 0.99, "top": 0.985})
+        self.joker_btn = RoundedButton(text="", bg=GOLD_DARK, font_size=sp(15),
+                                       size_hint=(None, 1), width=dp(160))
+        self.joker_btn.bind(on_release=lambda *a: self.use_joker())
+        back = RoundedButton(text="GERİ", bg=NAVY_LIGHT, size_hint=(None, 1), width=dp(100))
         back.bind(on_release=lambda *a: self.on_back())
-        self.add_widget(back)
+        topright.add_widget(self.joker_btn)
+        topright.add_widget(back)
+        self.add_widget(topright)
+        self._update_joker()
+
+    # -- joker ---------------------------------------------------------
+    def _update_joker(self):
+        self.joker_btn.text = "JOKER  x%d" % self.jokers
+        self.joker_btn.bg = list(GOLD_DARK if self.jokers > 0 else (0.35, 0.40, 0.50, 1))
+
+    def use_joker(self):
+        """İpucu: yanlış iki şıkkı eler. Oyun başına 3 hak, soru başına 1 kullanım."""
+        if self.locked or not self.current:
+            return
+        if self.jokers <= 0:
+            toast(self, "Bu oyunda joker hakkın kalmadı", RED, 1.4)
+            return
+        if self.joker_used_q:
+            toast(self, "Bu soruda zaten joker kullandın", RED, 1.4)
+            return
+        wrong = [i for i in range(4) if i != self.current.correct]
+        for i in random.sample(wrong, 2):
+            self.buttons[i].disabled = True
+            self.buttons[i].opacity = 0.28
+        self.jokers -= 1
+        self.joker_used_q = True
+        self._update_joker()
+        self.msg.text = "JOKER: 2 yanlış şık elendi  •  Kalan: %d" % self.jokers
+        self.msg.color = GOLD
+        play_sound("buy")
 
     # -- yardımcılar ---------------------------------------------------
     def _schedule(self, delay, fn):
@@ -144,6 +181,8 @@ class QuizScreen(BaseScreen):
         self.engine = QuizEngine(mode)
         self.queue = []
         self.streak = 0
+        self.jokers = JOKERS_PER_GAME
+        self._update_joker()
         self.mode_lbl.text = "KOLAY MOD  •  +1" if mode == "easy" else "ZOR MOD  •  +2"
         self._update_streak()
         self._fill_queue()
@@ -164,9 +203,11 @@ class QuizScreen(BaseScreen):
         self._token += 1
         tok = self._token
         self.locked = True
+        self.joker_used_q = False
         for i, b in enumerate(self.buttons):
             b.text = self.current.options[i]
             b.bg = list(NAVY_LIGHT)
+            b.opacity = 1
             b.disabled = True
         self.msg.text = ""
         self.photo.show_loading()

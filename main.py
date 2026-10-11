@@ -26,7 +26,7 @@ from penalty_system import PenaltyScreen
 from quiz_system import QuizModeScreen, QuizScreen
 from save_system import save
 from shop_system import ShopScreen
-from ui_system import (AvatarWidget, BarWidget, BaseScreen, GOLD, GREEN, GREEN_DARK,
+from ui_system import (BarWidget, BaseScreen, FaceAvatar, GOLD, GREEN, GREEN_DARK,
                        HeaderBar, NAVY_DARK, NAVY_LIGHT, RED, RoundedButton, TLabel,
                        goto, photos)
 
@@ -103,7 +103,7 @@ class MenuScreen(BaseScreen):
         root = BoxLayout(orientation="horizontal",
                          padding=[dp(26), dp(72), dp(26), dp(18)], spacing=dp(26))
         left = BoxLayout(orientation="vertical", spacing=dp(4), size_hint_x=0.45)
-        self.avatar = AvatarWidget("starter", size_hint_y=0.68)
+        self.avatar = FaceAvatar("starter", size_hint_y=0.68)
         self.name_lbl = TLabel(text="", halign="center", bold=True, font_size=sp(22),
                                size_hint_y=0.13)
         self.power_lbl = TLabel(text="", halign="center", bold=True, font_size=sp(16),
@@ -137,7 +137,7 @@ class MenuScreen(BaseScreen):
 
     def on_pre_enter(self, *a):
         p = get_player(save.selected_avatar)
-        self.avatar.set_player(p.id)
+        self.avatar.set_player(p.id)       # ismine göre gerçek yüz
         self.name_lbl.text = p.name
         self.power_lbl.text = "GÜÇ SEVİYESİ %d" % p.power
         self.power_bar.value = p.power

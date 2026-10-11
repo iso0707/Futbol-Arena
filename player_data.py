@@ -4,7 +4,7 @@ import re
 import unicodedata
 from collections import namedtuple
 
-Player = namedtuple("Player", "id name power price")
+Player = namedtuple("Player", "id name power price wiki")
 QuizPlayer = namedtuple("QuizPlayer", "name wiki slug")
 
 
@@ -61,9 +61,36 @@ _SHOP_RAW = [
     ("Rüştü Reçber", 74),
 ]
 
+# ORTA SEVİYE futbolcular (güç ~35-48): fiyatlar 1500'den başlar.
+_MID_RAW = [
+    ("Gökhan Töre", 36), ("Colin Kazim-Richards", 37), ("Ravel Morrison", 38),
+    ("Mevlüt Erdinç", 39), ("Wilfried Bony", 40), ("Adel Taarabt", 40),
+    ("Gökhan Gönül", 41), ("Jesse Lingard", 42), ("Caner Erkin", 42),
+    ("Tuncay Şanlı", 43), ("Hamit Altıntop", 44), ("Selçuk İnan", 44),
+    ("Ricardo Quaresma", 45), ("Hatem Ben Arfa", 46), ("Volkan Demirel", 47),
+    ("Mario Balotelli", 48),
+]
+
+# Wikipedia'da isim tek başına yanlış sayfaya gidiyorsa doğru başlık
+_WIKI = {
+    "Ronaldo Nazário": "Ronaldo (Brazilian footballer)",
+    "Rodri": "Rodri (footballer, born 1996)",
+    "Raúl": "Raúl González",
+    "Alisson": "Alisson Becker",
+    "Marcelo": "Marcelo (footballer, born 1988)",
+    "Neymar": "Neymar",
+    "Pelé": "Pelé",
+    "Kaká": "Kaká",
+    "Xavi": "Xavi",
+    "Casemiro": "Casemiro",
+    "Pedri": "Pedri",
+    "Selçuk İnan": "Selçuk İnan",
+    "Mario Balotelli": "Mario Balotelli",
+}
+
 # Güç aralığı -> fiyat aralığı (isteğe göre)
 _BANDS = [
-    (1, 20, 10, 300), (21, 40, 300, 800), (41, 60, 800, 1500),
+    (1, 20, 10, 300), (21, 34, 300, 1400), (36, 60, 1500, 2300),
     (61, 75, 1500, 2500), (76, 85, 2500, 3500), (86, 95, 3500, 4500),
     (96, 100, 4500, 5000),
 ]
@@ -78,7 +105,7 @@ def base_price(power):
 
 
 def _build_shop():
-    items = sorted(_SHOP_RAW, key=lambda r: (r[1], r[0]))
+    items = sorted(_SHOP_RAW + _MID_RAW, key=lambda r: (r[1], r[0]))
     out = []
     last = 0
     for name, power in items:
@@ -89,8 +116,8 @@ def _build_shop():
             if price <= last:                 # her futbolcuya ayrı fiyat
                 price = last + 5
             last = price
-        out.append(Player(slugify(name), name, power, price))
-    starter = Player("starter", "Çaylak", 10, 0)   # ücretsiz başlangıç avatarı
+        out.append(Player(slugify(name), name, power, price, _WIKI.get(name, name)))
+    starter = Player("starter", "Çaylak", 10, 0, None)   # ücretsiz başlangıç avatarı
     return [starter] + sorted(out, key=lambda p: (p.price, p.name))
 
 

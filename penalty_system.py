@@ -15,6 +15,7 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
+from crowd import CrowdWidget
 from player_data import get_player, shot_success_chance
 from save_system import save
 from ui_system import (AvatarWidget, BaseScreen, GOLD, GOLD_DARK, GREEN, GREEN_DARK,
@@ -139,9 +140,13 @@ class PenaltyScene(Widget):
         self._events = []
         self._start_touch = None
 
+        self.crowd = CrowdWidget()
+        self.goal_layer = Widget()
         self.keeper = KeeperWidget()
         self.ball = BallWidget()
         self.taker = AvatarWidget("starter")
+        self.add_widget(self.crowd)          # en arkada hareketli tribün
+        self.add_widget(self.goal_layer)     # kale çerçevesi + ağ (tribünün önünde)
         self.add_widget(self.keeper)
         self.add_widget(self.ball)
         self.add_widget(self.taker)
@@ -190,21 +195,16 @@ class PenaltyScene(Widget):
     def _draw_scenery(self):
         x, y, w, h = self.x, self.y, self.width, self.height
         gx, gy, gw, gh = self.gx, self.gy, self.gw, self.gh
+        horizon = gy + gh * 0.06
+        # hareketli tribün: ufuktan ekranın üstüne kadar
+        self.crowd.pos = (x, horizon)
+        self.crowd.size = (w, max(0, y + h - horizon))
         c = self.canvas.before
         c.clear()
         with c:
             Color(1, 1, 1, 1)
             Rectangle(texture=gradient_texture((0.13, 0.25, 0.50), (0.03, 0.07, 0.18)),
                       pos=(x, y), size=(w, h))
-            # tribün silueti
-            horizon = gy + gh * 0.06
-            Color(0.02, 0.04, 0.10, 0.9)
-            Rectangle(pos=(x, horizon), size=(w, h * 0.16))
-            n = 60
-            for i in range(n):
-                Color(1, 1, 1, 0.05 + 0.05 * ((i * 7) % 5) / 4.0)
-                Ellipse(pos=(x + w * i / n, horizon + h * 0.02 + (i * 13 % 7) * h * 0.016),
-                        size=(dp(6), dp(6)))
             # çim şeritleri
             bands = 8
             gh_total = horizon - y
@@ -221,7 +221,10 @@ class PenaltyScene(Widget):
             Color(1, 1, 1, 0.9)
             sx, sy = self.ball_start
             Ellipse(pos=(sx - dp(7), sy - self.ball_size * 0.55), size=(dp(14), dp(7)))
-            # kale arkası + ağ
+        # kale arkası + ağ + direkler (tribünün ÜSTÜNDE görünsün diye ayrı katman)
+        g = self.goal_layer.canvas
+        g.clear()
+        with g:
             Color(0, 0, 0, 0.38)
             Rectangle(pos=(gx, gy), size=(gw, gh))
             Color(1, 1, 1, 0.20)
@@ -230,7 +233,6 @@ class PenaltyScene(Widget):
                 Line(points=[gx + gw * i / cols, gy, gx + gw * i / cols, gy + gh], width=dp(1))
             for j in range(1, rows):
                 Line(points=[gx, gy + gh * j / rows, gx + gw, gy + gh * j / rows], width=dp(1))
-            # direkler
             Color(1, 1, 1, 1)
             Line(points=[gx, gy, gx, gy + gh, gx + gw, gy + gh, gx + gw, gy], width=dp(4.5))
 
@@ -424,8 +426,10 @@ class PenaltyScreen(BaseScreen):
         self.hint_lbl.opacity = 1
         self._refresh()
         self.scene.prepare_shot()
+        self.scene.crowd.start()
 
     def on_leave(self, *a):
+        self.scene.crowd.stop()
         if self._auto:
             self._auto.cancel()
             self._auto = None
@@ -474,6 +478,7 @@ class PenaltyScreen(BaseScreen):
         special = self._shot_special
         gained = save.record_penalty(outcome, special)
         if outcome == "goal":
+            self.scene.crowd.cheer()
             play_sound("goal")
             if special and gained == 25:
                 self.overlay = Overlay("TEBRİKLER! MUHTEŞEM BİR PENALTI! +25 PUAN", "",
@@ -488,6 +493,7 @@ class PenaltyScreen(BaseScreen):
                                        title_color=GREEN)
                 self.overlay.show(self)
         elif outcome == "saved":
+            self.scene.crowd.groan()
             play_sound("save")
             sub = "Buffon doğru köşeyi seçti."
             if special:
@@ -498,6 +504,7 @@ class PenaltyScreen(BaseScreen):
                                    title_color=RED)
             self.overlay.show(self)
         else:
+            self.scene.crowd.groan()
             play_sound("save")
             sub = "Şut isabetli çıkmadı."
             if special:

@@ -15,7 +15,8 @@ from kivy.animation import Animation
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
+from kivy.graphics import (Color, Ellipse, Line, Rectangle, RoundedRectangle,
+                           StencilPop, StencilPush, StencilUnUse, StencilUse)
 from kivy.graphics.texture import Texture
 from kivy.metrics import dp, sp
 from kivy.properties import ListProperty, NumericProperty
@@ -342,6 +343,130 @@ class AvatarWidget(Widget):
             Ellipse(pos=(cx - 0.105 * H, y0 + lift + 0.865 * H), size=(0.21 * H, 0.11 * H))
         self.num.font_size = max(sp(8), H * 0.12)
         self.num.center = (cx, y0 + lift + 0.60 * H)
+
+
+# ----------------------------------------------------------------------------
+# GERÇEK YÜZ (mağaza kartları + ana menü avatarı)
+# ----------------------------------------------------------------------------
+_face_tex_cache = {}
+
+
+def _face_texture(path):
+    """Fotoğrafın yüzün olduğu üst kare bölgesini kırpılmış doku olarak verir."""
+    tex = _face_tex_cache.get(path)
+    if tex is not None:
+        return tex
+    from kivy.core.image import Image as CoreImage
+    base = CoreImage(path).texture
+    tw, th = base.size
+    side = min(tw, th)
+    x0 = (tw - side) / 2.0
+    y0 = th - side                       # portre: üst kare (yüz+omuz); manzara: orta
+    if tw > th:
+        y0 = 0
+    tex = base.get_region(x0, y0, side, side)
+    if len(_face_tex_cache) > 160:
+        _face_tex_cache.clear()
+    _face_tex_cache[path] = tex
+    return tex
+
+
+class FaceDisc(Widget):
+    """Yuvarlak kırpılmış futbolcu fotoğrafı + yeşil çerçeve."""
+
+    def __init__(self, ring=GREEN, **kw):
+        super().__init__(**kw)
+        self.ring = ring
+        self.tex = None
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def set_texture(self, tex):
+        self.tex = tex
+        self.redraw()
+
+    def redraw(self, *a):
+        self.canvas.clear()
+        if self.tex is None or self.width <= 0:
+            return
+        d = min(self.width, self.height)
+        x = self.center_x - d / 2.0
+        y = self.center_y - d / 2.0
+        with self.canvas:
+            Color(0, 0, 0, 0.35)
+            Ellipse(pos=(x, y - dp(3)), size=(d, d))
+            StencilPush()
+            Ellipse(pos=(x, y), size=(d, d))
+            StencilUse()
+            Color(1, 1, 1, 1)
+            Rectangle(texture=self.tex, pos=(x, y), size=(d, d))
+            StencilUnUse()
+            Ellipse(pos=(x, y), size=(d, d))
+            StencilPop()
+            Color(*self.ring)
+            Line(circle=(self.center_x, self.center_y, d / 2.0), width=dp(2.2))
+
+
+class FaceAvatar(FloatLayout):
+    """Futbolcunun gerçek yüzünü gösterir. Fotoğraf inene / bulunamazsa çizimli
+    avatar görünür. `bob` özelliği ana menüdeki hafif zıplama animasyonu içindir."""
+    bob = NumericProperty(0)
+
+    def __init__(self, pid="starter", lazy=False, **kw):
+        super().__init__(**kw)
+        self.pid = None
+        self._token = 0
+        self._loaded = False
+        self._retry_at = 0
+        self._wiki = None
+        self._name = None
+        self.fallback = AvatarWidget(pid, size_hint=(1, 1))
+        self.disc = FaceDisc(size_hint=(1, 1))
+        self.add_widget(self.fallback)
+        self.add_widget(self.disc)
+        self.bind(bob=self._on_bob)
+        self.set_player(pid, lazy=lazy)
+
+    def _on_bob(self, *a):
+        self.disc.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
+        self.fallback.bob = self.bob
+        self.do_layout()
+
+    def set_player(self, pid, lazy=False):
+        from player_data import get_player
+        p = get_player(pid)
+        self._token += 1
+        self.pid = p.id
+        self._wiki = p.wiki
+        self._name = p.name
+        self._loaded = False
+        self.disc.set_texture(None)
+        self.fallback.opacity = 1
+        self.fallback.set_player(p.id)
+        if p.wiki and not lazy:
+            self.ensure_loaded()
+
+    def ensure_loaded(self):
+        """Fotoğrafı (yerel / önbellek / internet) yükle. Birden çok çağrı güvenli."""
+        if self._loaded or not self._wiki or time.time() < self._retry_at:
+            return
+        self._loaded = True
+        tok = self._token
+        from player_data import slugify
+        slug = slugify(self._name)
+        photos.request(slug, self._wiki, lambda path, tok=tok: self._got(tok, path), self._name)
+
+    def _got(self, tok, path):
+        if tok != self._token:
+            return
+        if not path:
+            self._loaded = False         # 30 sn sonra yeniden denensin
+            self._retry_at = time.time() + 30
+            return
+        try:
+            self.disc.set_texture(_face_texture(path))
+            self.fallback.opacity = 0
+        except Exception:
+            self._loaded = False
 
 
 # ----------------------------------------------------------------------------

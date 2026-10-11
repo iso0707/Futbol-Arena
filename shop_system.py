@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Futbolcu mağazası: satın alma ve avatar seçimi."""
+from kivy.clock import Clock
 from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
@@ -9,7 +10,7 @@ from kivy.core.window import Window
 
 from player_data import SHOP_PLAYERS
 from save_system import save
-from ui_system import (AvatarWidget, BarWidget, BaseScreen, GOLD, GOLD_DARK, GREEN,
+from ui_system import (BarWidget, FaceAvatar, BaseScreen, GOLD, GOLD_DARK, GREEN,
                        GREEN_DARK, GREY, NAVY_LIGHT, RED, RoundedButton, TLabel, goto,
                        play_sound, toast)
 
@@ -29,7 +30,7 @@ class ShopCard(BoxLayout):
             self._bd = Line(rounded_rectangle=(0, 0, 1, 1, dp(16)), width=dp(1.8))
         self.bind(pos=self._upd, size=self._upd)
 
-        self.avatar = AvatarWidget(player.id, size_hint=(None, 1), width=dp(66))
+        self.avatar = FaceAvatar(player.id, lazy=True, size_hint=(None, 1), width=dp(92))
         info = BoxLayout(orientation="vertical", spacing=dp(2))
         self.name_lbl = TLabel(text=player.name, bold=True, font_size=sp(15),
                                shorten=True, shorten_from="right", size_hint_y=0.25)
@@ -109,9 +110,27 @@ class ShopScreen(BaseScreen):
         self.grid.cols = max(2, min(4, int(Window.width / dp(330))))
         self.refresh_all()
         save.subscribe(self.refresh_all)
+        self._lazy_ev = Clock.schedule_interval(self._load_visible, 0.35)
 
     def on_leave(self, *a):
         save.unsubscribe(self.refresh_all)
+        ev = getattr(self, "_lazy_ev", None)
+        if ev:
+            ev.cancel()
+            self._lazy_ev = None
+
+    def _load_visible(self, dt):
+        """Sadece ekranda (veya hemen altında/üstünde) görünen kartların yüzünü indir."""
+        lo, hi = -dp(260), Window.height + dp(260)
+        for c in self.cards:
+            if c.avatar._loaded or not c.player.wiki:
+                continue
+            try:
+                wy = c.to_window(c.x, c.y)[1]
+            except Exception:
+                continue
+            if lo <= wy <= hi:
+                c.avatar.ensure_loaded()
 
     def refresh_all(self, *a):
         for c in self.cards:
