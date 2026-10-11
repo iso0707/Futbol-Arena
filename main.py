@@ -617,7 +617,7 @@ _SOUND_DIRS = [os.path.join(_BASE_DIR, "sounds"), asset_path("sounds"),
                os.path.join(_BASE_DIR, "music"), asset_path("music")]
 
 
-_EFFECTS = ("buy", "correct", "goal", "save", "wrong")
+_EFFECTS = ("buy", "correct", "goal", "save", "wrong", "taraftar")
 _EXTS = (".mp3", ".ogg", ".wav")
 
 
@@ -3189,7 +3189,7 @@ class FootballApp(App):
     _MUSIC = {"menu": ("music_menu", "music"), "mode": ("music_menu", "music"),
               "shop": ("music_menu", "music"), "username": ("music_menu", "music"),
               "starter": ("music_menu", "music"),
-              "quiz": ("music_quiz", "music"), "penalty": ("music_penalty", "music")}
+              "quiz": ("music_quiz", "music"), "penalty": ("taraftar", "music_penalty", "music")}
 
     def _on_screen(self, sm, name):
         self.header.opacity = 0 if name in ("username", "loading", "starter") else 1

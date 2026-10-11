@@ -65,7 +65,7 @@ _SOUND_DIRS = [os.path.join(_BASE_DIR, "sounds"), asset_path("sounds"),
                os.path.join(_BASE_DIR, "music"), asset_path("music")]
 
 
-_EFFECTS = ("buy", "correct", "goal", "save", "wrong")
+_EFFECTS = ("buy", "correct", "goal", "save", "wrong", "taraftar")
 _EXTS = (".mp3", ".ogg", ".wav")
 
 
