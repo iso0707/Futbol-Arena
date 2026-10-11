@@ -59,17 +59,25 @@ def goto(name):
 # SES (dosya yoksa sessizce atlanır)
 # ----------------------------------------------------------------------------
 _sound_cache = {}
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Sesler/müzikler bu klasörlerden herhangi birine konabilir:
+_SOUND_DIRS = [os.path.join(_BASE_DIR, "sounds"), asset_path("sounds"),
+               os.path.join(_BASE_DIR, "music"), asset_path("music")]
+
+
+def find_sound(name):
+    for d in _SOUND_DIRS:
+        for ext in ("mp3", "ogg", "wav"):
+            p = os.path.join(d, "%s.%s" % (name, ext))
+            if os.path.isfile(p):
+                return p
+    return None
 
 
 def play_sound(name):
     try:
         if name not in _sound_cache:
-            found = None
-            for ext in ("wav", "ogg", "mp3"):
-                p = asset_path("sounds", "%s.%s" % (name, ext))
-                if os.path.isfile(p):
-                    found = p
-                    break
+            found = find_sound(name)
             snd = None
             if found:
                 from kivy.core.audio import SoundLoader
@@ -79,6 +87,47 @@ def play_sound(name):
         if snd:
             snd.stop()
             snd.play()
+    except Exception:
+        pass
+
+
+# -- arka plan müziği --------------------------------------------------------
+_music = {"name": None, "snd": None}
+MUSIC_VOLUME = 0.45
+
+
+def stop_music():
+    snd = _music["snd"]
+    _music["name"] = None
+    _music["snd"] = None
+    if snd:
+        try:
+            snd.stop()
+        except Exception:
+            pass
+
+
+def play_music(*names):
+    """Verilen isimlerden dosyası olan İLK müziği döngüde çalar.
+    Zaten o müzik çalıyorsa yeniden başlatmaz. Hiçbiri yoksa sessiz kalır."""
+    try:
+        for n in names:
+            path = find_sound(n)
+            if not path:
+                continue
+            if _music["name"] == n and _music["snd"]:
+                return
+            stop_music()
+            from kivy.core.audio import SoundLoader
+            snd = SoundLoader.load(path)
+            if snd:
+                snd.loop = True
+                snd.volume = MUSIC_VOLUME
+                snd.play()
+                _music["name"] = n
+                _music["snd"] = snd
+            return
+        stop_music()
     except Exception:
         pass
 
@@ -497,7 +546,7 @@ class PhotoManager:
 
     def __init__(self):
         self.cache_dir = None
-        self._pool = ThreadPoolExecutor(max_workers=3)
+        self._pool = ThreadPoolExecutor(max_workers=5)
         self._waiting = {}
         self._failed = {}
         self._lock = threading.Lock()

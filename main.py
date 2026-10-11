@@ -20,15 +20,17 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import FadeTransition, ScreenManager
 from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
 
-from player_data import get_player
+from loading_screen import LoadingScreen
+from player_data import all_photo_items, get_player
 from penalty_system import PenaltyScreen
 from quiz_system import QuizModeScreen, QuizScreen
 from save_system import save
 from shop_system import ShopScreen
 from ui_system import (BarWidget, BaseScreen, FaceAvatar, GOLD, GREEN, GREEN_DARK,
                        HeaderBar, NAVY_DARK, NAVY_LIGHT, RED, RoundedButton, TLabel,
-                       goto, photos)
+                       goto, photos, play_music, stop_music)
 
 Window.softinput_mode = "below_target"       # klavye açılınca giriş kutusu görünür kalsın
 Window.clearcolor = NAVY_DARK
@@ -101,9 +103,9 @@ class MenuScreen(BaseScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         root = BoxLayout(orientation="horizontal",
-                         padding=[dp(26), dp(72), dp(26), dp(18)], spacing=dp(26))
+                         padding=[dp(26), dp(62), dp(26), dp(18)], spacing=dp(26))
         left = BoxLayout(orientation="vertical", spacing=dp(4), size_hint_x=0.45)
-        self.avatar = FaceAvatar("starter", size_hint_y=0.68)
+        self.avatar = FaceAvatar("starter", size_hint_y=0.88)
         self.name_lbl = TLabel(text="", halign="center", bold=True, font_size=sp(22),
                                size_hint_y=0.13)
         self.power_lbl = TLabel(text="", halign="center", bold=True, font_size=sp(16),
@@ -114,6 +116,7 @@ class MenuScreen(BaseScreen):
         left.add_widget(self.name_lbl)
         left.add_widget(self.power_lbl)
         left.add_widget(self.power_bar)
+        left.add_widget(Widget(size_hint_y=0.18))      # alttaki boşluk: avatarı yukarı iter
 
         right = BoxLayout(orientation="vertical", spacing=dp(14))
         right.add_widget(TLabel(text="FUTBOL ARENA", halign="center", bold=True,
@@ -169,6 +172,8 @@ class FootballApp(App):
 
         root = FloatLayout()
         self.sm = ScreenManager(transition=FadeTransition(duration=0.18))
+        self.loading = LoadingScreen(name="loading")
+        self.sm.add_widget(self.loading)
         self.sm.add_widget(UsernameScreen(name="username"))
         self.sm.add_widget(MenuScreen(name="menu"))
         self.sm.add_widget(QuizModeScreen(name="mode"))
@@ -181,13 +186,34 @@ class FootballApp(App):
         root.add_widget(self.header)
 
         self.sm.bind(current=self._on_screen)
-        self.sm.current = "menu" if save.username else "username"
-        self._on_screen(self.sm, self.sm.current)
+        # İndirilmemiş fotoğraf varsa önce yükleme ekranı; hepsi hazırsa direkt oyun.
+        pending = [it for it in all_photo_items() if not photos.find_local(it[0])]
+        if pending:
+            self.sm.current = "loading"
+            self._on_screen(self.sm, "loading")
+            self.loading.begin(pending)
+        else:
+            self.sm.current = "menu" if save.username else "username"
+            self._on_screen(self.sm, self.sm.current)
         Window.bind(on_keyboard=self._on_keyboard)
         return root
 
+    # Müzik dosyaları (hepsi isteğe bağlı): music.mp3 genel, music_menu / music_quiz /
+    # music_penalty ekrana özel. Dosya yoksa o ekran sessiz kalır.
+    _MUSIC = {"menu": ("music_menu", "music"), "mode": ("music_menu", "music"),
+              "shop": ("music_menu", "music"), "username": ("music_menu", "music"),
+              "quiz": ("music_quiz", "music"), "penalty": ("music_penalty", "music")}
+
     def _on_screen(self, sm, name):
-        self.header.opacity = 0 if name == "username" else 1
+        self.header.opacity = 0 if name in ("username", "loading") else 1
+        self._update_music(name)
+
+    def _update_music(self, name):
+        names = self._MUSIC.get(name)
+        if names:
+            play_music(*names)
+        else:
+            stop_music()
 
     def _on_keyboard(self, window, key, *args):
         if key == 27:                          # Android geri tuşu / ESC
@@ -200,13 +226,15 @@ class FootballApp(App):
 
     def on_pause(self):
         save.flush()
+        stop_music()
         return True
 
     def on_resume(self):
-        pass
+        self._update_music(self.sm.current)
 
     def on_stop(self):
         save.flush()
+        stop_music()
 
 
 if __name__ == "__main__":

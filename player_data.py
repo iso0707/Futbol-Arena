@@ -117,7 +117,8 @@ def _build_shop():
                 price = last + 5
             last = price
         out.append(Player(slugify(name), name, power, price, _WIKI.get(name, name)))
-    starter = Player("starter", "Çaylak", 10, 0, None)   # ücretsiz başlangıç avatarı
+    starter = Player("starter", "Barış Alper Yılmaz", 10, 0,
+                     "Barış Alper Yılmaz")             # ücretsiz başlangıç avatarı (güç 10)
     return [starter] + sorted(out, key=lambda p: (p.price, p.name))
 
 
@@ -202,3 +203,16 @@ def _quiz(raw):
 
 EASY_POOL = _quiz(_EASY_RAW)
 HARD_POOL = _quiz(_HARD_RAW)
+
+
+def all_photo_items():
+    """Açılışta önceden indirilecek tüm fotoğraflar: (slug, wiki_başlığı, isim).
+    Başlangıç oyuncusu, mağaza ve quiz havuzları; aynı kişi tekrar eklenmez."""
+    seen = {}
+    for p in SHOP_PLAYERS:
+        if p.wiki:
+            slug = slugify(p.name)
+            seen.setdefault(slug, (slug, p.wiki, p.name))
+    for q in EASY_POOL + HARD_POOL:
+        seen.setdefault(q.slug, (q.slug, q.wiki, q.name))
+    return list(seen.values())
