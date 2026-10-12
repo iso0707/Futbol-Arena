@@ -40,12 +40,17 @@ class CrowdWidget(Widget):
         self._t = 0.0
         self._ev = None
         self._seed = 7
+        self._rebuild_pending = False
         self.bind(pos=self._rebuild, size=self._rebuild)
 
     def set_username(self, name):
         self.username = name or ""
         if self._banner_lbl is not None:
             self._banner_lbl.text = self.username.upper()
+        # pankart yoksa ama isim geldiyse yeniden çiz
+        if self._banner_lbl is None and self.username and \
+                self.width > 0 and self.height > 0:
+            self._rebuild()
 
     def start(self):
         if self._ev is None:
@@ -71,6 +76,13 @@ class CrowdWidget(Widget):
         x, y, w, h = self.x, self.y, self.width, self.height
         self.canvas.clear()
         self._blocks, self._flags, self._flashes = [], [], []
+        # eski pankart label'ını kaldır
+        if self._banner_lbl is not None:
+            try:
+                self.remove_widget(self._banner_lbl)
+            except Exception:
+                pass
+            self._banner_lbl = None
         if w <= 0 or h <= 0:
             return
         rnd = random.Random(self._seed)
@@ -161,7 +173,8 @@ class CrowdWidget(Widget):
                 Color(0.85, 0.85, 0.85, 1)
                 Line(points=[fx, fy, fx, fy + pole], width=dp(1.4))
                 Color(*rnd.choice(_HOME + _AWAY))
-                Rectangle(pos=(fx, fy + pole * 0.55), size=(pole * 0.75, pole * 0.45))
+                Rectangle(pos=(fx, fy + pole * 0.55),
+                          size=(pole * 0.75, pole * 0.45))
                 PopMatrix()
                 self._flags.append([rot, rnd.uniform(0, 6.28)])
 
@@ -180,39 +193,49 @@ class CrowdWidget(Widget):
                 fx = x + rnd.uniform(0.03, 0.97) * w
                 fy = y + ad_h + rnd.uniform(0.05, 0.92) * (h - ad_h)
                 col = Color(1, 1, 0.9, 0)
-                el = Ellipse(pos=(fx - dp(4), fy - dp(4)), size=(dp(8), dp(8)))
+                el = Ellipse(pos=(fx - dp(4), fy - dp(4)),
+                             size=(dp(8), dp(8)))
                 self._flashes.append([col, el])
 
+            # KULLANICI ADI PANKARTI
             if self.username:
-                bw_p = min(w * 0.34, dp(320))
-                bh_p = max(dp(34), h * 0.07)
+                bw_p = min(w * 0.36, dp(340))
+                bh_p = max(dp(40), h * 0.085)
                 bx_p = x + w * 0.5 - bw_p / 2.0
-                by_p = y + ad_h + (h - ad_h) * 0.58
-                Color(0, 0, 0, 0.35)
-                Rectangle(pos=(bx_p + dp(2), by_p - dp(2)), size=(bw_p, bh_p))
-                Color(0.96, 0.96, 0.96, 1)
+                by_p = y + ad_h + (h - ad_h) * 0.60
+                Color(0, 0, 0, 0.4)
+                Rectangle(pos=(bx_p + dp(3), by_p - dp(3)),
+                          size=(bw_p, bh_p))
+                Color(0.97, 0.97, 0.97, 1)
                 Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p))
                 Color(0.85, 0.10, 0.15, 1)
-                Rectangle(pos=(bx_p, by_p + bh_p - bh_p * 0.14),
-                          size=(bw_p, bh_p * 0.14))
-                Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p * 0.14))
-                if self._banner_lbl is None:
-                    self._banner_lbl = Label(
-                        text=self.username.upper(), bold=True,
-                        color=(0.05, 0.05, 0.10, 1),
-                        font_size=max(sp(12), bh_p * 0.55),
-                        halign="center", valign="middle",
-                        size_hint=(None, None),
-                        size=(bw_p, bh_p),
-                        pos=(bx_p, by_p))
-                    self._banner_lbl.text_size = (bw_p, bh_p)
-                    self.add_widget(self._banner_lbl)
-                else:
-                    self._banner_lbl.text = self.username.upper()
-                    self._banner_lbl.pos = (bx_p, by_p)
-                    self._banner_lbl.size = (bw_p, bh_p)
-                    self._banner_lbl.text_size = (bw_p, bh_p)
-                    self._banner_lbl.font_size = max(sp(12), bh_p * 0.55)
+                Rectangle(pos=(bx_p, by_p + bh_p - bh_p * 0.16),
+                          size=(bw_p, bh_p * 0.16))
+                Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p * 0.16))
+                Color(0.85, 0.10, 0.15, 1)
+                # iki küçük bayrak kenarı
+                Rectangle(pos=(bx_p - dp(6), by_p),
+                          size=(dp(4), bh_p))
+                Rectangle(pos=(bx_p + bw_p + dp(2), by_p),
+                          size=(dp(4), bh_p))
+
+        # Label widget olarak ekle (canvas'ta text çizemeyiz)
+        if self.username:
+            bw_p = min(w * 0.36, dp(340))
+            bh_p = max(dp(40), h * 0.085)
+            bx_p = x + w * 0.5 - bw_p / 2.0
+            by_p = y + ad_h + (h - ad_h) * 0.60
+            self._banner_lbl = Label(
+                text=self.username.upper(),
+                bold=True,
+                color=(0.05, 0.05, 0.10, 1),
+                font_size=max(sp(14), bh_p * 0.50),
+                halign="center", valign="middle",
+                size_hint=(None, None),
+                size=(bw_p, bh_p),
+                pos=(bx_p, by_p))
+            self._banner_lbl.text_size = (bw_p, bh_p)
+            self.add_widget(self._banner_lbl)
 
     def _tick(self, dt):
         self._t += dt
@@ -221,7 +244,8 @@ class CrowdWidget(Widget):
         wave = 1.0 if self.excite < 0.6 else 1.6
         for blk in self._blocks:
             tr, ph, sp_, col = blk
-            s = math.sin(t * sp_ * (0.7 + self.excite * 0.9) + ph + col * 5.0 * wave)
+            s = math.sin(t * sp_ * (0.7 + self.excite * 0.9) + ph +
+                         col * 5.0 * wave)
             tr.y = amp * (s if s > 0 else s * 0.15)
         for fl in self._flags:
             fl[0].angle = math.sin(t * 2.4 + fl[1]) * (6 + 10 * self.excite)
@@ -231,4 +255,5 @@ class CrowdWidget(Widget):
             elif random.random() < 0.012 + 0.03 * self.excite:
                 col.a = 1.0
         if self._banner_lbl:
-            self._banner_lbl.y += math.sin(t * 2.2) * 0.06
+            base_y = self._banner_lbl.y
+            self._banner_lbl.y += math.sin(t * 2.2) * 0.08

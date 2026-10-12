@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Futbolcu veritabanı: mağaza listesi, fiyatlar ve quiz havuzları."""
+"""Futbolcu veritabanı: mağaza + yarışma havuzları (sadece futbolcular)."""
 import re
 import unicodedata
 from collections import namedtuple
 
 Player = namedtuple("Player", "id name power price wiki")
-QuizPlayer = namedtuple("QuizPlayer", "name wiki slug")
+QuizPlayer = namedtuple("QuizPlayer", "name wiki slug kind")
 
 
 def slugify(text):
@@ -73,14 +73,9 @@ _WIKI = {
     "Raúl": "Raúl González",
     "Alisson": "Alisson Becker",
     "Marcelo": "Marcelo (footballer, born 1988)",
-    "Neymar": "Neymar",
-    "Pelé": "Pelé",
-    "Kaká": "Kaká",
-    "Xavi": "Xavi",
-    "Casemiro": "Casemiro",
-    "Pedri": "Pedri",
-    "Selçuk İnan": "Selçuk İnan",
-    "Mario Balotelli": "Mario Balotelli",
+    "Neymar": "Neymar", "Pelé": "Pelé", "Kaká": "Kaká", "Xavi": "Xavi",
+    "Casemiro": "Casemiro", "Pedri": "Pedri",
+    "Selçuk İnan": "Selçuk İnan", "Mario Balotelli": "Mario Balotelli",
 }
 
 _BANDS = [
@@ -153,7 +148,8 @@ def _build_shop():
             if price <= last:
                 price = last + 5
             last = price
-        out.append(Player(slugify(name), name, power, price, _WIKI.get(name, name)))
+        out.append(Player(slugify(name), name, power, price,
+                          _WIKI.get(name, name)))
     starter = _starter_player()
     return [starter] + sorted(out, key=lambda p: (p.price, p.name))
 
@@ -171,72 +167,32 @@ def shot_success_chance(power):
     return 0.45 + 0.45 * (power / 100.0)
 
 
-_EASY_RAW = [
-    ("Lionel Messi", None), ("Cristiano Ronaldo", None),
-    ("Kylian Mbappé", None), ("Erling Haaland", None), ("Neymar", None),
-    ("Kevin De Bruyne", None), ("Mohamed Salah", None),
-    ("Vinícius Júnior", None), ("Jude Bellingham", None),
-    ("Harry Kane", None), ("Luka Modrić", None),
-    ("Robert Lewandowski", None), ("Karim Benzema", None),
-    ("Antoine Griezmann", None), ("Son Heung-min", None),
-    ("Ronaldinho", None), ("Zinedine Zidane", None),
-    ("Thierry Henry", None), ("Andrés Iniesta", None),
-    ("Wayne Rooney", None), ("Sergio Ramos", None), ("Manuel Neuer", None),
-    ("Gianluigi Buffon", None), ("Zlatan Ibrahimović", None),
-    ("Paul Pogba", None), ("Eden Hazard", None), ("David Beckham", None),
-    ("Diego Maradona", None), ("Pelé", None), ("Luis Suárez", None),
-    ("Iker Casillas", None), ("Toni Kroos", None), ("Mesut Özil", None),
-    ("Sergio Agüero", None), ("Ángel Di María", None),
-    ("Thibaut Courtois", None), ("Virgil van Dijk", None),
-    ("Lamine Yamal", None), ("Arda Güler", None),
-    ("Hakan Çalhanoğlu", None), ("Andrea Pirlo", None),
-    ("Francesco Totti", None),
-    ("Ronaldo Nazário", "Ronaldo (Brazilian footballer)"),
-    ("Steven Gerrard", None), ("Frank Lampard", None), ("Kaká", None),
-    ("Bruno Fernandes", None), ("Bukayo Saka", None), ("Phil Foden", None),
-    ("Rodri", "Rodri (footballer, born 1996)"), ("Pedri", None),
-    ("Gareth Bale", None), ("Xavi", None),
-]
+# ==========================================================================
+# HAVUZLARI YÜKLE (SADECE FUTBOLCULAR)
+# ==========================================================================
+EASY_PLAYERS = []
+HARD_PLAYERS = []
+EASY_CLUBS = []
+HARD_CLUBS = []
+EASY_POOL = []
+HARD_POOL = []
 
-_HARD_RAW = [
-    ("Hristo Stoichkov", None), ("Gheorghe Hagi", None),
-    ("Roberto Baggio", None), ("Michael Laudrup", None),
-    ("Jari Litmanen", None), ("Dennis Bergkamp", None),
-    ("Matthias Sammer", None), ("Rivaldo", None), ("Roberto Carlos", None),
-    ("Lothar Matthäus", None), ("Gabriel Batistuta", None),
-    ("Fabio Cannavaro", None), ("Alessandro Nesta", None),
-    ("Gianfranco Zola", None), ("Pavel Nedvěd", None),
-    ("Andriy Shevchenko", None), ("Hernán Crespo", None),
-    ("Juan Román Riquelme", None), ("Clarence Seedorf", None),
-    ("Edgar Davids", None), ("Patrick Kluivert", None),
-    ("Marc Overmars", None), ("Robert Pirès", None),
-    ("Nicolas Anelka", None), ("Claude Makélélé", None),
-    ("Fernando Redondo", None), ("Gaizka Mendieta", None),
-    ("Rui Costa", None), ("Luís Figo", None), ("Michael Ballack", None),
-    ("Miroslav Klose", None), ("Ole Gunnar Solskjær", None),
-    ("Dwight Yorke", None), ("Peter Schmeichel", None),
-    ("Jens Lehmann", None), ("Oliver Kahn", None),
-    ("Jay-Jay Okocha", None), ("Nwankwo Kanu", None),
-    ("George Weah", None), ("Roger Milla", None), ("Hakan Şükür", None),
-    ("Tugay Kerimoğlu", None), ("Alex de Souza", None),
-    ("Rüştü Reçber", None), ("Emre Belözoğlu", None),
-    ("Hidetoshi Nakata", None), ("Ali Daei", None),
-    ("Park Ji-sung", None), ("Carlos Valderrama", None),
-    ("René Higuita", None), ("Franz Beckenbauer", None),
-    ("Paolo Maldini", None), ("Raúl", "Raúl González"),
-    ("Samuel Eto'o", None), ("Didier Drogba", None),
-]
-
-
-def _quiz(raw):
-    return [QuizPlayer(n, w or n, slugify(n)) for n, w in raw]
-
-
-EASY_POOL = _quiz(_EASY_RAW)
-HARD_POOL = _quiz(_HARD_RAW)
+try:
+    from quiz_data import (EASY_PLAYERS_700, HARD_PLAYERS_400)
+    EASY_PLAYERS = [QuizPlayer(n, w or n, slugify(n), "player")
+                    for n, w in EASY_PLAYERS_700]
+    HARD_PLAYERS = [QuizPlayer(n, w or n, slugify(n), "player")
+                    for n, w in HARD_PLAYERS_400]
+    EASY_CLUBS = []
+    HARD_CLUBS = []
+    EASY_POOL = EASY_PLAYERS
+    HARD_POOL = HARD_PLAYERS
+except Exception as _e:
+    print("quiz_data yüklenemedi:", _e)
 
 
 def all_photo_items():
+    """Yükleme ekranı için tüm fotoğraflar."""
     seen = {}
     for name, wiki in STARTER_CHOICES:
         seen.setdefault(slugify(name), (slugify(name), wiki, name))
@@ -244,6 +200,6 @@ def all_photo_items():
         if p.wiki:
             slug = slugify(p.name)
             seen.setdefault(slug, (slug, p.wiki, p.name))
-    for q in EASY_POOL + HARD_POOL:
+    for q in EASY_PLAYERS + HARD_PLAYERS:
         seen.setdefault(q.slug, (q.slug, q.wiki, q.name))
     return list(seen.values())

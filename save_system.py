@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Kalıcı kayıt sistemi."""
+"""Kalıcı kayıt sistemi. Günlük giriş ödülü + PAS joker günlük hakkı eklendi."""
 import copy
 import json
 import os
@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import threading
 import time
+import datetime
 
 DEFAULT_DATA = {
     "version": 1,
@@ -18,6 +19,11 @@ DEFAULT_DATA = {
     "starter": "",
     "starter_is_self": False,
     "special_penalty_rights": 0,
+    "pass_date": "",
+    "pass_used_today": 0,
+    "login_last_date": "",       # <-- YENİ: son giriş tarihi (YYYY-MM-DD)
+    "login_streak": 0,           # <-- YENİ: kaç gün üst üste giriş yaptı
+    "daily_reward_total": 0,     # <-- YENİ: toplam kaç puan günlükten kazanıldı
     "stats": {
         "correct": 0, "wrong": 0, "best_streak": 0,
         "easy_correct": 0, "hard_correct": 0, "games_played": 0,
@@ -25,6 +31,10 @@ DEFAULT_DATA = {
         "penalty_missed": 0, "special_goals": 0,
     },
 }
+
+PASS_DAILY_LIMIT = 5
+PASS_COST = 1
+DAILY_REWARD = 45               # <-- YENİ: günlük ödül puanı
 
 
 def _merge(defaults, raw):
@@ -88,6 +98,11 @@ class SaveSystem:
             d["selected_avatar"] = "starter"
         if not d.get("created_at"):
             d["created_at"] = int(time.time())
+        # pas tarihi kontrol
+        today = datetime.date.today().isoformat()
+        if d.get("pass_date") != today:
+            d["pass_date"] = today
+            d["pass_used_today"] = 0
 
     def flush(self):
         if not self.path:
@@ -136,6 +151,7 @@ class SaveSystem:
             except Exception:
                 pass
 
+    # -------------------- ÖZELLİKLER --------------------
     @property
     def username(self):
         return self.data["username"]
@@ -172,9 +188,26 @@ class SaveSystem:
     def stats(self):
         return self.data["stats"]
 
+    @property
+    def pass_left(self):
+        """Bugün kalan pas hakkı."""
+        today = datetime.date.today().isoformat()
+        if self.data.get("pass_date") != today:
+            return PASS_DAILY_LIMIT
+        return max(0, PASS_DAILY_LIMIT - self.data.get("pass_used_today", 0))
+
+    @property
+    def login_streak(self):
+        return self.data.get("login_streak", 0)
+
+    @property
+    def daily_reward_total(self):
+        return self.data.get("daily_reward_total", 0)
+
     def owns(self, pid):
         return pid in self.data["owned"]
 
+    # -------------------- İŞLEMLER --------------------
     def set_username(self, name):
         with self._lock:
             self.data["username"] = name.strip()
@@ -259,6 +292,46 @@ class SaveSystem:
                 s["penalty_missed"] += 1
             self._commit()
         return gained
+
+    def use_pass(self):
+        """PAS joker kullan. -1 puan düşer, günlük hak azalır."""
+        with self._lock:
+            today = datetime.date.today().isoformat()
+            if self.data.get("pass_date") != today:
+                self.data["pass_date"] = today
+                self.data["pass_used_today"] = 0
+            if self.data["pass_used_today"] >= PASS_DAILY_LIMIT:
+                return False
+            if self.data["points"] < PASS_COST:
+                return False
+            self.data["points"] -= PASS_COST
+            self.data["pass_used_today"] += 1
+            self._commit()
+            return True
+
+    # -------------------- GÜNLÜK GİRİŞ ÖDÜLÜ --------------------
+    def check_daily_login(self):
+        """Her gün ilk girişte 45 puan ver. (kazanıldı_mı, puan, seri) döndürür.
+        Aynı gün içinde tekrar çağrılırsa (False, 0, seri) döner."""
+        with self._lock:
+            today = datetime.date.today().isoformat()
+            last = self.data.get("login_last_date", "")
+            if last == today:
+                return False, 0, self.data.get("login_streak", 0)
+            # dün mü girmişti?
+            yesterday = (datetime.date.today() -
+                         datetime.timedelta(days=1)).isoformat()
+            if last == yesterday:
+                streak = self.data.get("login_streak", 0) + 1
+            else:
+                streak = 1
+            self.data["login_last_date"] = today
+            self.data["login_streak"] = streak
+            self.data["points"] += DAILY_REWARD
+            self.data["daily_reward_total"] = (
+                self.data.get("daily_reward_total", 0) + DAILY_REWARD)
+            self._commit()
+            return True, DAILY_REWARD, streak
 
 
 save = SaveSystem()

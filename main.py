@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Futbol Arena - ana dosya (Kivy). Yatay mod, mobil dokunmatik."""
+"""Futbolum - ana dosya (Kivy). Yatay mod, mobil dokunmatik."""
 import os
 import datetime
 
@@ -25,15 +25,15 @@ from kivy.uix.screenmanager import FadeTransition, ScreenManager
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 
-from save_system import save
+from save_system import save, DAILY_REWARD
 from player_data import (STARTER_CHOICES, all_photo_items, get_player,
                          set_starter, set_starter_from_user, slugify)
 from ui_system import (AvatarWidget, Background, BarWidget, BaseScreen, FaceAvatar,
                        GOLD, GOLD_DARK, GREEN, GREEN_DARK, GREY, NAVY_DARK,
                        NAVY_LIGHT, PhotoPickerPopup, RED, RoundPhoto,
-                       RoundedButton, TLabel, copy_user_photo, goto, photos,
-                       play_music, start_screen, stop_music, toast,
-                       user_photo_path)
+                       RoundedButton, SharePopup, TLabel, copy_user_photo, goto,
+                       photos, play_music, start_screen, stop_music, toast,
+                       user_photo_path, music_status, GAME_NAME)
 from loading_screen import LoadingScreen
 from quiz_system import QuizModeScreen, QuizScreen
 from shop_system import ShopScreen
@@ -71,8 +71,8 @@ class UsernameScreen(BaseScreen):
                                     card.height, dp(26))
         card.bind(pos=upd, size=upd)
 
-        card.add_widget(TLabel(text="FUTBOL ARENA", halign="center", bold=True,
-                               font_size=sp(30), color=GREEN,
+        card.add_widget(TLabel(text=GAME_NAME.upper(), halign="center",
+                               bold=True, font_size=sp(30), color=GREEN,
                                size_hint_y=None, height=dp(44)))
         card.add_widget(TLabel(text="Başlamadan önce kullanıcı adını seç",
                                halign="center", font_size=sp(16),
@@ -90,7 +90,8 @@ class UsernameScreen(BaseScreen):
         self.input.bind(text=self._limit,
                         on_text_validate=lambda *a: self.confirm())
         card.add_widget(self.input)
-        self.err = TLabel(text="", halign="center", color=RED, font_size=sp(14),
+        self.err = TLabel(text="", halign="center", color=RED,
+                          font_size=sp(14),
                           size_hint_y=None, height=dp(22))
         card.add_widget(self.err)
         btn = RoundedButton(text="BAŞLA", bg=GREEN, font_size=sp(20))
@@ -329,31 +330,42 @@ class MenuScreen(BaseScreen):
         root = BoxLayout(orientation="horizontal",
                          padding=[dp(26), dp(62), dp(26), dp(18)],
                          spacing=dp(26))
-        left = BoxLayout(orientation="vertical", spacing=dp(4),
+        left = BoxLayout(orientation="vertical", spacing=dp(6),
                          size_hint_x=0.45)
 
-        # YUVARLAK ve KÜÇÜK avatar
-        avatar_box = FloatLayout(size_hint_y=0.62)
+        # Yuvarlak küçük avatar
+        avatar_box = FloatLayout(size_hint_y=0.55)
         self.avatar = RoundPhoto(ring=GREEN, size_hint=(None, None),
-                                 size=(dp(180), dp(180)),
-                                 pos_hint={"center_x": 0.5, "center_y": 0.5})
+                                 size=(dp(170), dp(170)),
+                                 pos_hint={"center_x": 0.5, "center_y": 0.55})
         avatar_box.add_widget(self.avatar)
         self.name_lbl = TLabel(text="", halign="center", bold=True,
                                font_size=sp(22), size_hint_y=0.13)
         self.power_lbl = TLabel(text="", halign="center", bold=True,
-                                font_size=sp(16), color=GOLD,
+                                font_size=sp(15), color=GOLD,
                                 size_hint_y=0.10)
         self.power_bar = BarWidget(maximum=100, size_hint=(0.7, None),
                                    height=dp(10),
                                    pos_hint={"center_x": 0.5})
+
+        # PAYLAŞ butonu
+        self.share_btn = RoundedButton(
+            text="📤  PAYLAŞ",
+            bg=(0.20, 0.55, 0.85, 1),
+            font_size=sp(15),
+            size_hint=(0.75, None), height=dp(44),
+            pos_hint={"center_x": 0.5})
+        self.share_btn.bind(on_release=lambda *a: self._open_share())
+
         left.add_widget(avatar_box)
         left.add_widget(self.name_lbl)
         left.add_widget(self.power_lbl)
         left.add_widget(self.power_bar)
-        left.add_widget(Widget(size_hint_y=0.18))
+        left.add_widget(Widget(size_hint_y=0.06))
+        left.add_widget(self.share_btn)
 
         right = BoxLayout(orientation="vertical", spacing=dp(14))
-        right.add_widget(TLabel(text="FUTBOL ARENA", halign="center",
+        right.add_widget(TLabel(text=GAME_NAME.upper(), halign="center",
                                 bold=True, font_size=sp(30), color=GREEN,
                                 size_hint_y=None, height=dp(46)))
         b1 = RoundedButton(text="OYUNA BAŞLA", bg=GREEN, font_size=sp(24))
@@ -367,7 +379,7 @@ class MenuScreen(BaseScreen):
             right.add_widget(b)
         self.stats_lbl = TLabel(text="", halign="center", font_size=sp(13),
                                 color=(1, 1, 1, 0.75),
-                                size_hint_y=None, height=dp(34))
+                                size_hint_y=None, height=dp(28))
         right.add_widget(self.stats_lbl)
         self.music_lbl = TLabel(text="", halign="center", font_size=sp(11),
                                 color=(1, 1, 1, 0.45),
@@ -379,7 +391,6 @@ class MenuScreen(BaseScreen):
 
     def on_pre_enter(self, *a):
         p = get_player(save.selected_avatar)
-        # Kullanıcı kendini seçtiyse onun fotoğrafı, değilse wiki fotoğrafı
         if save.selected_avatar == "starter" and save.starter_is_self:
             up = user_photo_path()
             if up:
@@ -404,6 +415,30 @@ class MenuScreen(BaseScreen):
         if path:
             self.avatar.set_path(path)
 
+    def _open_share(self):
+        """Paylaşım kartını aç. Avatarı da yuvarlak olarak içine koy."""
+        # Avatarı kopyala
+        def make_avatar():
+            av = RoundPhoto(ring=GOLD, size_hint=(None, None),
+                            size=(dp(140), dp(140)),
+                            pos_hint={"center_x": 0.5, "center_y": 0.5})
+            # Aynı fotoğrafı göster
+            if save.selected_avatar == "starter" and save.starter_is_self:
+                up = user_photo_path()
+                if up:
+                    av.set_path(up)
+            else:
+                p = get_player(save.selected_avatar)
+                if p.wiki:
+                    def cb(path):
+                        if path:
+                            av.set_path(path)
+                    photos.request(slugify(p.name), p.wiki, cb, p.name)
+            return av
+
+        popup = SharePopup(avatar_widget_factory=make_avatar)
+        popup.show(self)
+
     def on_enter(self, *a):
         pass
 
@@ -421,7 +456,7 @@ class SettingsScreen(BaseScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         card = BoxLayout(orientation="vertical", size_hint=(None, None),
-                         size=(dp(560), dp(380)), spacing=dp(12), padding=dp(24),
+                         size=(dp(560), dp(440)), spacing=dp(10), padding=dp(24),
                          pos_hint={"center_x": 0.5, "center_y": 0.5})
         with card.canvas.before:
             Color(0, 0, 0, 0.35)
@@ -442,24 +477,32 @@ class SettingsScreen(BaseScreen):
 
         card.add_widget(TLabel(text="AYARLAR", halign="center", bold=True,
                                font_size=sp(26), color=GREEN,
-                               size_hint_y=None, height=dp(46)))
+                               size_hint_y=None, height=dp(44)))
         card.add_widget(Widget(size_hint_y=None, height=dp(4)))
 
         self.user_lbl = TLabel(text="", halign="left", bold=True,
-                               font_size=sp(17),
-                               size_hint_y=None, height=dp(34))
-        self.date_lbl = TLabel(text="", halign="left", font_size=sp(15),
-                               color=(1, 1, 1, 0.85),
+                               font_size=sp(16),
                                size_hint_y=None, height=dp(30))
+        self.date_lbl = TLabel(text="", halign="left", font_size=sp(14),
+                               color=(1, 1, 1, 0.85),
+                               size_hint_y=None, height=dp(26))
         self.pts_lbl = TLabel(text="", halign="left", bold=True,
-                              font_size=sp(15), color=GOLD,
-                              size_hint_y=None, height=dp(30))
-        self.avatar_lbl = TLabel(text="", halign="left", font_size=sp(15),
+                              font_size=sp(14), color=GOLD,
+                              size_hint_y=None, height=dp(26))
+        self.streak_lbl = TLabel(text="", halign="left", font_size=sp(14),
                                  color=(1, 1, 1, 0.85),
-                                 size_hint_y=None, height=dp(30))
+                                 size_hint_y=None, height=dp(26))
+        self.daily_lbl = TLabel(text="", halign="left", font_size=sp(14),
+                                color=(1, 1, 1, 0.85),
+                                size_hint_y=None, height=dp(26))
+        self.avatar_lbl = TLabel(text="", halign="left", font_size=sp(14),
+                                 color=(1, 1, 1, 0.85),
+                                 size_hint_y=None, height=dp(26))
         card.add_widget(self.user_lbl)
         card.add_widget(self.date_lbl)
         card.add_widget(self.pts_lbl)
+        card.add_widget(self.streak_lbl)
+        card.add_widget(self.daily_lbl)
         card.add_widget(self.avatar_lbl)
         card.add_widget(Widget())
 
@@ -479,6 +522,9 @@ class SettingsScreen(BaseScreen):
         else:
             self.date_lbl.text = "Hesap Açma Tarihi:  -"
         self.pts_lbl.text = "Toplam Puan:  %d" % save.points
+        self.streak_lbl.text = "Günlük Giriş Serisi:  %d gün" % save.login_streak
+        self.daily_lbl.text = ("Günlükten Kazanılan:  %d puan (her gün +%d)"
+                               % (save.daily_reward_total, DAILY_REWARD))
         p = get_player(save.selected_avatar)
         self.avatar_lbl.text = "Seçili Avatar:  %s" % p.name
 
@@ -490,11 +536,10 @@ class SettingsScreen(BaseScreen):
 # ANA UYGULAMA
 # ============================================================================
 class FootballApp(App):
-    title = "Futbol Arena"
+    title = GAME_NAME
 
     def build(self):
         save.init(self.user_data_dir)
-        # Başlangıç futbolcusunu geri yükle
         if save.starter_is_self:
             set_starter_from_user()
         elif save.starter:
@@ -520,6 +565,10 @@ class FootballApp(App):
         root.add_widget(self.header)
 
         self.sm.bind(current=self._on_screen)
+
+        # Günlük giriş ödülü (kullanıcı adı girilmişse kontrol et)
+        self._check_daily_reward_on_menu = False
+
         # Yükleme ekranı: indirilmemiş fotoğraflar varsa
         pending = [it for it in all_photo_items()
                    if not photos.find_local(it[0])]
@@ -528,8 +577,11 @@ class FootballApp(App):
             self._on_screen(self.sm, "loading")
             self.loading.begin(pending)
         else:
+            # Yükleme yok → doğrudan başla
             self.sm.current = start_screen()
             self._on_screen(self.sm, self.sm.current)
+            Clock.schedule_once(lambda dt: self._daily_reward_check(), 0.6)
+
         Window.bind(on_keyboard=self._on_keyboard)
         return root
 
@@ -548,6 +600,26 @@ class FootballApp(App):
         self.header.opacity = 0 if name in ("username", "loading",
                                             "starter") else 1
         self._update_music(name)
+        # Menüye her girildiğinde günlük ödül kontrolü (bir kere)
+        if name == "menu" and save.username and not \
+                self._check_daily_reward_on_menu:
+            self._check_daily_reward_on_menu = True
+            Clock.schedule_once(lambda dt: self._daily_reward_check(), 0.5)
+
+    def _daily_reward_check(self):
+        """Günlük giriş ödülünü kontrol et, alındıysa göster."""
+        if not save.username:
+            return
+        got, amount, streak = save.check_daily_login()
+        if got:
+            from ui_system import Overlay, GOLD as _GOLD, GOLD_DARK as _GOLD_DARK
+            overlay = Overlay(
+                "GÜNLÜK GİRİŞ ÖDÜLÜ!",
+                "+%d PUAN\n\nGün serisi: %d 🔥\nHer gün gir, ödülünü kaçırma!" % (
+                    amount, streak),
+                [("HARİKA!", lambda: overlay.dismiss(), _GOLD_DARK)],
+                title_color=_GOLD)
+            overlay.show(self.sm.current_screen)
 
     def _update_music(self, name):
         names = self._MUSIC.get(name)
@@ -556,7 +628,7 @@ class FootballApp(App):
         else:
             stop_music()
         try:
-            self.sm.get_screen("menu").music_lbl.text = music_status_import()
+            self.sm.get_screen("menu").music_lbl.text = music_status()
         except Exception:
             pass
 
@@ -580,11 +652,6 @@ class FootballApp(App):
     def on_stop(self):
         save.flush()
         stop_music()
-
-
-def music_status_import():
-    from ui_system import music_status
-    return music_status()
 
 
 if __name__ == "__main__":

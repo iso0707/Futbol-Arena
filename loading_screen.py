@@ -1,19 +1,87 @@
 # -*- coding: utf-8 -*-
-"""Açılış yükleme ekranı: tüm futbolcu fotoğrafları önceden indirilir, hepsi
-bitince oyun açılır. "BEKLEMEDEN GEÇ" ile istenirse beklemeden girilebilir."""
+"""Açılış yükleme ekranı: logo + hareketli bar + hafif animasyonlar."""
+import math
+import os
+
+from kivy.animation import Animation
 from kivy.clock import Clock
-from kivy.graphics import Color, Line, RoundedRectangle
+from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
 from kivy.metrics import dp, sp
+from kivy.properties import NumericProperty
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.image import Image
+from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 
 from save_system import save
-from ui_system import (BarWidget, BaseScreen, GOLD_DARK, GREEN, NAVY_LIGHT, RoundedButton,
-                       TLabel, goto, photos)
+from ui_system import (BaseScreen, GOLD_DARK, GREEN, NAVY_DARK, NAVY_LIGHT,
+                       RoundedButton, TLabel, asset_path, goto, photos,
+                       start_screen)
 
 
+# ============================================================================
+# HAREKETLİ YÜKLEME ÇUBUĞU
+# ============================================================================
+class AnimatedLoadingBar(Widget):
+    """Hareketli yükleme çubuğu: yeşil dolgu + üstünde kayan beyaz ışık."""
+    value = NumericProperty(0)
+    maximum = NumericProperty(100)
+    _phase = NumericProperty(0)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.bind(pos=self._draw, size=self._draw,
+                  value=self._draw, maximum=self._draw,
+                  _phase=self._draw)
+        self._ev = None
+        self._draw()
+
+    def start(self):
+        if self._ev is None:
+            self._ev = Clock.schedule_interval(self._tick, 1 / 30.0)
+
+    def stop(self):
+        if self._ev:
+            self._ev.cancel()
+            self._ev = None
+
+    def _tick(self, dt):
+        self._phase = (self._phase + dt * 1.6) % 1.0
+
+    def _draw(self, *a):
+        self.canvas.clear()
+        x, y = self.pos
+        w, h = self.size
+        if w <= 0 or h <= 0:
+            return
+        r = h / 2.0
+        frac = max(0.0, min(1.0, self.value / float(self.maximum or 1)))
+        with self.canvas:
+            # arka plan (koyu)
+            Color(1, 1, 1, 0.12)
+            RoundedRectangle(pos=(x, y), size=(w, h), radius=[r])
+            # dolgu (yeşil)
+            if frac > 0:
+                Color(*GREEN)
+                RoundedRectangle(pos=(x, y), size=(max(h, w * frac), h),
+                                 radius=[r])
+                # dolgunun üstünde kayan beyaz ışık
+                shine_w = w * 0.12
+                shine_x = x + (w * frac - shine_w) * self._phase
+                Color(1, 1, 1, 0.30)
+                RoundedRectangle(pos=(shine_x, y + h * 0.30),
+                                 size=(shine_w, h * 0.40),
+                                 radius=[h * 0.20])
+            # kenar çizgisi
+            Color(1, 1, 1, 0.25)
+            Line(rounded_rectangle=(x, y, w, h, r), width=dp(1))
+
+
+# ============================================================================
+# PRELOADER (mevcut haliyle aynı, fotoğrafları indirir)
+# ============================================================================
 class Preloader:
-    """Fotoğrafları en fazla 4'er 4'er indirir (geri kalan havuz oyun içi istekler için
-    boş kalır). İnternet yoksa ilk denemelerden sonra bekletmeden bırakır."""
     MAX_ACTIVE = 4
     OFFLINE_STREAK = 6
 
@@ -38,11 +106,11 @@ class Preloader:
         self._pump()
 
     def cancel(self):
-        self.cancelled = True            # sıradakiler indirilmez, yoldakiler biter
+        self.cancelled = True
 
     def _pump(self):
-        while (not self.cancelled and not self.finished and self.active < self.MAX_ACTIVE
-               and self.idx < self.total):
+        while (not self.cancelled and not self.finished and
+               self.active < self.MAX_ACTIVE and self.idx < self.total):
             slug, wiki, name = self.items[self.idx]
             self.idx += 1
             self.active += 1
@@ -74,82 +142,135 @@ class Preloader:
         self.on_done(self.offline)
 
 
-# ----------------------------------------------------------------------------
+# ============================================================================
+# YÜKLEME EKRANI
+# ============================================================================
 class LoadingScreen(BaseScreen):
     def __init__(self, **kw):
-        super().__init__(**kw)
+        super().__init__(with_background=True, **kw)
         self.pre = None
         self._left = False
-        self._dots = 0
-        self._dot_ev = None
+        self._pulse_ev = None
 
-        card = BoxLayout(orientation="vertical", size_hint=(None, None),
-                         size=(dp(560), dp(330)), spacing=dp(10), padding=dp(24),
-                         pos_hint={"center_x": 0.5, "center_y": 0.5})
-        with card.canvas.before:
-            Color(0, 0, 0, 0.35)
-            sh = RoundedRectangle(radius=[dp(26)])
-            Color(*NAVY_LIGHT)
-            bg = RoundedRectangle(radius=[dp(26)])
-            Color(*GREEN)
-            bd = Line(rounded_rectangle=(0, 0, 1, 1, dp(26)), width=dp(2))
+        root = FloatLayout()
 
-        def upd(*a):
-            sh.pos = (card.x, card.y - dp(4))
-            sh.size = card.size
-            bg.pos = card.pos
-            bg.size = card.size
-            bd.rounded_rectangle = (card.x, card.y, card.width, card.height, dp(26))
-        card.bind(pos=upd, size=upd)
+        # ÜSTTE "FUTBOLUM" — büyük beyaz yazı
+        self.title = Label(
+            text="FUTBOLUM",
+            bold=True,
+            font_size=sp(64),
+            color=(1, 1, 1, 1),
+            size_hint=(None, None),
+            size=(dp(700), dp(90)),
+            pos_hint={"center_x": 0.5, "top": 0.92})
+        root.add_widget(self.title)
 
-        card.add_widget(TLabel(text="FUTBOL ARENA", halign="center", bold=True,
-                               font_size=sp(32), color=GREEN, size_hint_y=None, height=dp(48)))
-        self.status = TLabel(text="Futbolcu fotoğrafları yükleniyor", halign="center",
-                             font_size=sp(17), color=(1, 1, 1, 0.9),
-                             size_hint_y=None, height=dp(32))
-        card.add_widget(self.status)
-        self.bar = BarWidget(maximum=1, size_hint=(0.9, None), height=dp(14),
-                             pos_hint={"center_x": 0.5})
-        card.add_widget(self.bar)
-        self.count = TLabel(text="", halign="center", bold=True, font_size=sp(18),
-                            size_hint_y=None, height=dp(30))
-        card.add_widget(self.count)
-        card.add_widget(TLabel(text="Hepsi inince oyun açılır. Beklemek istemezsen aşağıdaki "
-                                    "butonla geçebilirsin.", halign="center",
-                               font_size=sp(13), color=(1, 1, 1, 0.6)))
-        skip = RoundedButton(text="BEKLEMEDEN GEÇ", bg=GOLD_DARK, font_size=sp(18),
-                             size_hint_y=None, height=dp(54))
-        skip.bind(on_release=lambda *a: self.skip())
-        card.add_widget(skip)
-        self.add_widget(card)
+        # Oyun logosu (logo.png ana klasörde olacak)
+        logo_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "logo.png")
+        self.logo = None
+        if os.path.isfile(logo_path):
+            self.logo = Image(source=logo_path, fit_mode="contain",
+                              size_hint=(None, None),
+                              size=(dp(240), dp(240)),
+                              pos_hint={"center_x": 0.5, "center_y": 0.55})
+            root.add_widget(self.logo)
+        else:
+            # logo yoksa yeşil daire içinde top çiz
+            self.logo = _FallbackLogo(size_hint=(None, None),
+                                      size=(dp(200), dp(200)),
+                                      pos_hint={"center_x": 0.5,
+                                                "center_y": 0.55})
+            root.add_widget(self.logo)
 
-    # -- akış ----------------------------------------------------------------
+        # Ortada hareketli bar
+        self.bar = AnimatedLoadingBar(
+            maximum=1,
+            size_hint=(None, None),
+            size=(dp(560), dp(20)),
+            pos_hint={"center_x": 0.5, "center_y": 0.28})
+        root.add_widget(self.bar)
+
+        # Alt yazı (durum)
+        self.status = TLabel(
+            text="Fotoğraflar yükleniyor",
+            halign="center",
+            font_size=sp(15),
+            color=(1, 1, 1, 0.75),
+            size_hint=(None, None),
+            size=(dp(560), dp(24)),
+            pos_hint={"center_x": 0.5, "center_y": 0.22})
+        root.add_widget(self.status)
+
+        # Yüzde
+        self.percent = TLabel(
+            text="%0",
+            halign="center",
+            bold=True,
+            font_size=sp(18),
+            color=GREEN,
+            size_hint=(None, None),
+            size=(dp(200), dp(24)),
+            pos_hint={"center_x": 0.5, "center_y": 0.18})
+        root.add_widget(self.percent)
+
+        # Beklemeden geç butonu
+        self.skip_btn = RoundedButton(
+            text="BEKLEMEDEN GEÇ",
+            bg=GOLD_DARK,
+            font_size=sp(15),
+            size_hint=(None, None),
+            size=(dp(220), dp(44)),
+            pos_hint={"center_x": 0.5, "y": 0.05})
+        self.skip_btn.bind(on_release=lambda *a: self.skip())
+        root.add_widget(self.skip_btn)
+
+        self.add_widget(root)
+
+    # -- animasyon ---------------------------------------------------------
+    def on_enter(self, *a):
+        self.bar.start()
+        # FUTBOLUM yazısı hafif nefes alır
+        self._pulse_title()
+
+    def on_leave(self, *a):
+        self.bar.stop()
+        if self._pulse_ev:
+            self._pulse_ev.cancel()
+            self._pulse_ev = None
+        Animation.cancel_all(self.title, "font_size")
+
+    def _pulse_title(self):
+        anim = (Animation(font_size=sp(68), d=0.9, t="in_out_sine") +
+                Animation(font_size=sp(64), d=0.9, t="in_out_sine"))
+        anim.repeat = True
+        anim.start(self.title)
+
+    # -- akış --------------------------------------------------------------
     def begin(self, items):
         self._left = False
         self.bar.maximum = max(1, len(items))
         self.bar.value = 0
-        self.count.text = "0 / %d" % len(items)
-        self._dot_ev = Clock.schedule_interval(self._animate_dots, 0.5)
+        self.percent.text = "%0"
         self.pre = Preloader(items, self._progress, self._done)
         self.pre.start()
-
-    def _animate_dots(self, dt):
-        self._dots = (self._dots + 1) % 4
-        if not self.status.text.startswith("İnternet"):
-            self.status.text = "Futbolcu fotoğrafları yükleniyor" + "." * self._dots
 
     def _progress(self, done, total):
         self.bar.maximum = max(1, total)
         self.bar.value = done
-        self.count.text = "%d / %d" % (done, total)
+        pct = int(round(100.0 * done / max(1, total)))
+        self.percent.text = "%%%d" % pct
+        self.status.text = "Fotoğraflar yükleniyor  (%d / %d)" % (done, total)
 
     def _done(self, offline):
         if offline:
-            self.status.text = "İnternet yok gibi görünüyor, fotoğraflar sonra yüklenecek"
+            self.status.text = "İnternet yok — fotoğraflar sonra yüklenecek"
             Clock.schedule_once(lambda dt: self._proceed(), 1.8)
         else:
             self.bar.value = self.bar.maximum
-            Clock.schedule_once(lambda dt: self._proceed(), 0.35)
+            self.percent.text = "%100"
+            self.status.text = "Hazır! Oyun açılıyor..."
+            Clock.schedule_once(lambda dt: self._proceed(), 0.5)
 
     def skip(self):
         if self.pre:
@@ -160,10 +281,43 @@ class LoadingScreen(BaseScreen):
         if self._left:
             return
         self._left = True
-        if self._dot_ev:
-            self._dot_ev.cancel()
-            self._dot_ev = None
-        goto("menu" if save.username else "username")
+        goto(start_screen())
 
     def on_back(self):
         self.skip()
+
+
+# ============================================================================
+# YEDEK LOGO (logo.png yoksa) — top çizimi
+# ============================================================================
+class _FallbackLogo(Widget):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.bind(pos=self._draw, size=self._draw)
+        self._draw()
+
+    def _draw(self, *a):
+        self.canvas.clear()
+        w = min(self.width, self.height)
+        if w <= 0:
+            return
+        cx, cy = self.center
+        with self.canvas:
+            # yeşil disk
+            Color(*GREEN)
+            Ellipse(pos=(cx - w / 2, cy - w / 2), size=(w, w))
+            # beyaz top
+            s = w * 0.7
+            Color(1, 1, 1, 1)
+            Ellipse(pos=(cx - s / 2, cy - s / 2), size=(s, s))
+            # siyah beşgen (merkez)
+            Color(0.08, 0.08, 0.10, 1)
+            Ellipse(pos=(cx - s * 0.15, cy - s * 0.15),
+                    size=(s * 0.30, s * 0.30))
+            # kenar noktaları
+            for ang in range(5):
+                a = math.radians(90 + ang * 72)
+                px = cx + math.cos(a) * s * 0.36
+                py = cy + math.sin(a) * s * 0.36
+                Ellipse(pos=(px - s * 0.08, py - s * 0.08),
+                        size=(s * 0.16, s * 0.16))

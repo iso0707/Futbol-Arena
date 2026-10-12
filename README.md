@@ -1,21 +1,21 @@
-# Futbol Arena (saf Python + Kivy)
+# ⚽ Futbolum
 
-## APK alma (GitHub)
-1. Bu klasördeki TÜM dosyaları (`.github` klasörü dahil) yeni bir GitHub deposuna yükle.
-2. Depo > Actions > "Build APK" çalışır (ilk derleme ~20-30 dk).
-3. Bitince Actions > çalışma > Artifacts > `futbol-arena-apk` içinden APK'yı indir.
+Saf Python + Kivy ile yazılmış mobil futbol quiz & penaltı oyunu.
 
-## Masaüstünde deneme
-    pip install kivy certifi
-    python main.py
+## 📦 APK Alma (GitHub Actions)
 
-## Fotoğraflar
-Fotoğraf sırası: `assets/players/<slug>.jpg|png` -> önbellek -> Wikipedia'dan indirme.
-Dosya adı = isim küçük harf, boşluk `_`, aksansız. Örn: `lionel_messi.jpg`, `kylian_mbappe.jpg`.
-İnternet yoksa ve dosya yoksa varsayılan futbolcu görseli gösterilir.
+1. Bu klasördeki **TÜM dosyaları** yeni bir GitHub deposuna yükle:
+   - `.py` dosyaları (8 adet)
+   - `logo.png` (ana klasörde)
+   - `.github/` klasörü (workflow)
+   - `assets/` klasörü (varsa)
 
-## Kaleci görseli
-`assets/goalkeeper/buffon.png` (şeffaf PNG) koyarsan çizim yerine o kullanılır.
+2. GitHub → **Actions** sekmesi → **"Build APK"** otomatik çalışır (ilk derleme ~20-30 dk).
 
-## Sesler (isteğe bağlı)
-`assets/sounds/` içine correct, wrong, goal, save, buy (.wav/.ogg/.mp3) koy.
+3. Bitince **Actions → çalışma → Artifacts → futbolum-apk** içinden APK'yı indir.
+
+## 🖥️ Masaüstünde Deneme
+
+```bash
+pip install kivy certifi
+python main.py

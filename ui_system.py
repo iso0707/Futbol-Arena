@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Ortak arayüz: tema, butonlar, üst bar, avatar, fotoğraf yöneticisi, yuvarlak foto."""
+"""Ortak arayüz: tema, butonlar, üst bar, avatar, fotoğraf, paylaşım."""
 import json
 import os
 import re
@@ -42,6 +42,8 @@ GOLD_DARK = (0.80, 0.52, 0.08, 1)
 RED = (0.86, 0.22, 0.25, 1)
 GREY = (0.35, 0.40, 0.50, 1)
 WHITE = (1, 1, 1, 1)
+
+GAME_NAME = "Futbolum"
 
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
@@ -221,7 +223,8 @@ class Background(Widget):
         self._grad.size = self.size
         self._circle.circle = (x + w * 0.5, y + h * 0.5, h * 0.26)
         self._mid.points = [x + w * 0.5, y, x + w * 0.5, y + h]
-        self._box.rectangle = (x - dp(4), y + h * 0.5 - h * 0.28, w * 0.14, h * 0.56)
+        self._box.rectangle = (x - dp(4), y + h * 0.5 - h * 0.28,
+                               w * 0.14, h * 0.56)
 
 
 # ----------------------------------------------------------------------------
@@ -302,9 +305,11 @@ class CoinWidget(Widget):
             Color(*GOLD)
             Ellipse(pos=(cx - s / 2, cy - s / 2), size=(s, s))
             Color(1, 0.92, 0.55, 1)
-            Ellipse(pos=(cx - s * 0.33, cy - s * 0.33), size=(s * 0.66, s * 0.66))
+            Ellipse(pos=(cx - s * 0.33, cy - s * 0.33),
+                    size=(s * 0.66, s * 0.66))
             Color(0.88, 0.62, 0.10, 1)
-            Ellipse(pos=(cx - s * 0.20, cy - s * 0.20), size=(s * 0.40, s * 0.40))
+            Ellipse(pos=(cx - s * 0.20, cy - s * 0.20),
+                    size=(s * 0.40, s * 0.40))
 
 
 class BarWidget(Widget):
@@ -393,7 +398,8 @@ class AvatarWidget(Widget):
         c.clear()
         with c:
             Color(0, 0, 0, 0.35)
-            Ellipse(pos=(cx - 0.28 * H, y0 - 0.015 * H), size=(0.56 * H, 0.07 * H))
+            Ellipse(pos=(cx - 0.28 * H, y0 - 0.015 * H),
+                    size=(0.56 * H, 0.07 * H))
             Color(*skin)
             for dx in (-0.12, 0.04):
                 RoundedRectangle(pos=(cx + dx * H, y0 + lift + 0.05 * H),
@@ -421,7 +427,8 @@ class AvatarWidget(Widget):
                                  size=(0.07 * H, 0.13 * H), radius=[dp(4)])
             Color(1, 1, 1, 0.14)
             RoundedRectangle(pos=(cx - 0.17 * H, y0 + lift + 0.60 * H),
-                             size=(0.17 * H, 0.15 * H), radius=[dp(10), 0, 0, 0])
+                             size=(0.17 * H, 0.15 * H),
+                             radius=[dp(10), 0, 0, 0])
             Color(*skin)
             Rectangle(pos=(cx - 0.03 * H, y0 + lift + 0.73 * H),
                       size=(0.06 * H, 0.05 * H))
@@ -486,7 +493,8 @@ class FaceDisc(Widget):
             Color(1, 1, 1, 1)
             Ellipse(texture=self.tex, pos=(x, y), size=(d, d))
             Color(*self.ring)
-            Line(circle=(self.center_x, self.center_y, d / 2.0), width=dp(2.2))
+            Line(circle=(self.center_x, self.center_y, d / 2.0),
+                 width=dp(2.2))
 
 
 class FaceAvatar(FloatLayout):
@@ -511,7 +519,8 @@ class FaceAvatar(FloatLayout):
         self.set_player(pid, lazy=lazy)
 
     def _on_bob(self, *a):
-        self.img.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
+        self.img.pos_hint = {"center_x": 0.5,
+                             "center_y": 0.5 + self.bob * 0.015}
         self.fallback.bob = self.bob
         self.do_layout()
 
@@ -552,7 +561,8 @@ class FaceAvatar(FloatLayout):
         tok = self._token
         from player_data import slugify
         photos.request(slugify(self._name), self._wiki,
-                       lambda path, tok=tok: self._got(tok, path), self._name)
+                       lambda path, tok=tok: self._got(tok, path),
+                       self._name)
 
     def _got(self, tok, path):
         if tok != self._token:
@@ -579,7 +589,6 @@ class FaceAvatar(FloatLayout):
 # YUVARLAK FOTOĞRAF
 # ----------------------------------------------------------------------------
 class RoundPhoto(Widget):
-    """Yuvarlak maskeli fotoğraf."""
     _cache = {}
 
     def __init__(self, ring=GREEN, ring_w=2.2, **kw):
@@ -644,7 +653,8 @@ class RoundPhoto(Widget):
                 Color(*NAVY_LIGHT)
                 Ellipse(pos=(x, y), size=(d, d))
                 Color(*self.ring)
-                Line(circle=(self.center_x, self.center_y, d / 2.0 - dp(1)),
+                Line(circle=(self.center_x, self.center_y,
+                             d / 2.0 - dp(1)),
                      width=dp(self.ring_w))
 
 
@@ -658,11 +668,26 @@ def user_photo_dir():
 
 
 def user_photo_path():
-    d = user_photo_dir()
-    for ext in ("png", "jpg", "jpeg", "webp"):
-        p = os.path.join(d, "me.%s" % ext)
-        if os.path.isfile(p):
-            return p
+    dirs = []
+    try:
+        dirs.append(user_photo_dir())
+    except Exception:
+        pass
+    try:
+        from kivy.app import App
+        app = App.get_running_app()
+        if app:
+            dirs.append(os.path.join(app.user_data_dir, "user_photos"))
+    except Exception:
+        pass
+    for d in dirs:
+        for ext in ("png", "jpg", "jpeg", "webp"):
+            p = os.path.join(d, "me.%s" % ext)
+            try:
+                if os.path.isfile(p) and os.path.getsize(p) > 200:
+                    return p
+            except OSError:
+                pass
     return None
 
 
@@ -673,25 +698,44 @@ def copy_user_photo(source):
     ext = os.path.splitext(source)[1].lower() or ".png"
     if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         ext = ".png"
-    for old in ("me.png", "me.jpg", "me.jpeg", "me.webp"):
-        p = os.path.join(user_photo_dir(), old)
-        if os.path.isfile(p):
+    targets = []
+    try:
+        targets.append(user_photo_dir())
+    except Exception:
+        pass
+    try:
+        from kivy.app import App
+        app = App.get_running_app()
+        if app:
+            d2 = os.path.join(app.user_data_dir, "user_photos")
+            os.makedirs(d2, exist_ok=True)
+            targets.append(d2)
+    except Exception:
+        pass
+    final = None
+    for d in targets:
+        for old in ("me.png", "me.jpg", "me.jpeg", "me.webp"):
+            p = os.path.join(d, old)
             try:
-                os.remove(p)
+                if os.path.isfile(p):
+                    os.remove(p)
             except OSError:
                 pass
-    dst = os.path.join(user_photo_dir(), "me%s" % ext)
-    try:
-        shutil.copy2(source, dst)
-        RoundPhoto._cache.clear()
-        return dst
-    except Exception:
-        return None
+        dst = os.path.join(d, "me%s" % ext)
+        try:
+            shutil.copy2(source, dst)
+            if final is None:
+                final = dst
+        except Exception:
+            continue
+    RoundPhoto._cache.clear()
+    return final
 
 
 class PhotoPickerPopup(FloatLayout):
     def __init__(self, on_pick, **kw):
         super().__init__(**kw)
+        self._on_pick = on_pick
         with self.canvas.before:
             Color(0, 0, 0, 0.80)
             self._dim = Rectangle()
@@ -699,8 +743,8 @@ class PhotoPickerPopup(FloatLayout):
 
         from kivy.uix.filechooser import FileChooserListView
         card = BoxLayout(orientation="vertical", size_hint=(None, None),
-                         size=(min(dp(720), Window.width * 0.92),
-                               min(dp(540), Window.height * 0.90)),
+                         size=(min(dp(720), Window.width * 0.94),
+                               min(dp(540), Window.height * 0.92)),
                          pos_hint={"center_x": 0.5, "center_y": 0.5},
                          padding=dp(12), spacing=dp(8))
         with card.canvas.before:
@@ -709,7 +753,8 @@ class PhotoPickerPopup(FloatLayout):
             Color(*NAVY_LIGHT)
             self._cb = RoundedRectangle(radius=[dp(18)])
             Color(*GREEN)
-            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(18)), width=dp(2))
+            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(18)),
+                            width=dp(2))
 
         def upd(*a):
             self._cs.pos = (card.x, card.y - dp(4))
@@ -720,24 +765,41 @@ class PhotoPickerPopup(FloatLayout):
                                           card.height, dp(18))
         card.bind(pos=upd, size=upd)
 
-        card.add_widget(TLabel(text="KENDİ FOTOĞRAFINI SEÇ",
+        card.add_widget(TLabel(text="FOTOĞRAF SEÇ",
                                halign="center", bold=True, font_size=sp(20),
                                color=GREEN, size_hint_y=None, height=dp(34)))
+
+        start_dir = "/"
+        candidates = [
+            "/storage/emulated/0/DCIM/Camera",
+            "/storage/emulated/0/DCIM",
+            "/storage/emulated/0/Pictures",
+            "/storage/emulated/0/Download",
+            "/storage/emulated/0",
+            os.path.expanduser("~"),
+            "/",
+        ]
+        for c in candidates:
+            try:
+                if os.path.isdir(c):
+                    start_dir = c
+                    break
+            except Exception:
+                pass
+
+        filters = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.PNG", "*.JPG",
+                   "*.JPEG", "*.WEBP"]
         try:
-            start_dir = os.path.expanduser("~")
-            if not os.path.isdir(start_dir):
-                start_dir = "/"
+            self.fc = FileChooserListView(path=start_dir, filters=filters)
         except Exception:
-            start_dir = "/"
-        self.fc = FileChooserListView(
-            path=start_dir,
-            filters=["*.png", "*.jpg", "*.jpeg", "*.webp"])
+            self.fc = FileChooserListView(path="/")
         card.add_widget(self.fc)
+
         row = BoxLayout(orientation="horizontal", spacing=dp(10),
                         size_hint_y=None, height=dp(50))
         ok = RoundedButton(text="BUNU KULLAN", bg=GREEN, font_size=sp(16))
         cancel = RoundedButton(text="İPTAL", bg=NAVY_LIGHT, font_size=sp(16))
-        ok.bind(on_release=lambda *a: self._pick(on_pick))
+        ok.bind(on_release=lambda *a: self._pick())
         cancel.bind(on_release=lambda *a: self._close())
         row.add_widget(ok)
         row.add_widget(cancel)
@@ -748,10 +810,15 @@ class PhotoPickerPopup(FloatLayout):
         self._dim.pos = self.pos
         self._dim.size = self.size
 
-    def _pick(self, cb):
+    def _pick(self):
         sel = self.fc.selection
         if sel:
-            cb(sel[0])
+            p = sel[0]
+            if os.path.isfile(p):
+                try:
+                    self._on_pick(p)
+                except Exception:
+                    pass
         self._close()
 
     def _close(self):
@@ -794,7 +861,7 @@ def _ssl_context():
 
 
 class PhotoManager:
-    UA = "FutbolArena/1.0 (mobile quiz game; Kivy)"
+    UA = "Futbolum/1.0 (mobile quiz game; Kivy)"
 
     def __init__(self):
         self.cache_dir = None
@@ -969,7 +1036,7 @@ class PlayerPhoto(FloatLayout):
     def show_loading(self):
         self.img.opacity = 0
         self.avatar.opacity = 0.35
-        self.status.text = "Fotoğraf yükleniyor..."
+        self.status.text = "Görsel yükleniyor..."
 
     def show_default(self, msg=""):
         self.img.opacity = 0
@@ -984,11 +1051,11 @@ class PlayerPhoto(FloatLayout):
             self.status.text = ""
             Clock.schedule_once(lambda dt: self._verify(path), 0.4)
         except Exception:
-            self.show_default("Fotoğraf okunamadı")
+            self.show_default("Görsel okunamadı")
 
     def _verify(self, path):
         if self.img.source == path and self.img.texture is None:
-            self.show_default("Fotoğraf okunamadı")
+            self.show_default("Görsel okunamadı")
 
 
 # ----------------------------------------------------------------------------
@@ -1004,12 +1071,14 @@ class HeaderBar(BoxLayout):
             Color(0.02, 0.05, 0.13, 0.82)
             self._bg = RoundedRectangle(radius=[dp(23)])
             Color(GREEN[0], GREEN[1], GREEN[2], 0.9)
-            self._bd = Line(rounded_rectangle=(0, 0, 1, 1, dp(23)), width=dp(1.6))
-        self.name_lbl = TLabel(text="", font_size=sp(15), bold=True, shorten=True,
-                               shorten_from="right")
+            self._bd = Line(rounded_rectangle=(0, 0, 1, 1, dp(23)),
+                            width=dp(1.6))
+        self.name_lbl = TLabel(text="", font_size=sp(15), bold=True,
+                               shorten=True, shorten_from="right")
         self.coin = CoinWidget(size_hint=(None, 1), width=dp(30))
-        self.pts_lbl = TLabel(text="0", font_size=sp(20), bold=True, color=GOLD,
-                              size_hint=(None, 1), width=dp(84), halign="left")
+        self.pts_lbl = TLabel(text="0", font_size=sp(20), bold=True,
+                              color=GOLD, size_hint=(None, 1), width=dp(84),
+                              halign="left")
         self.add_widget(self.name_lbl)
         self.add_widget(self.coin)
         self.add_widget(self.pts_lbl)
@@ -1058,7 +1127,8 @@ class Overlay(FloatLayout):
             Color(*NAVY_LIGHT)
             self._cb = RoundedRectangle(radius=[dp(24)])
             Color(*title_color)
-            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(24)), width=dp(2.2))
+            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(24)),
+                            width=dp(2.2))
 
         def upd(*a):
             self._cs.pos = (card.x, card.y - dp(4))
@@ -1075,7 +1145,8 @@ class Overlay(FloatLayout):
         if subtitle:
             card.add_widget(TLabel(text=subtitle, halign="center",
                                    font_size=sp(16),
-                                   color=(1, 1, 1, 0.9), size_hint_y=0.28))
+                                   color=(1, 1, 1, 0.9),
+                                   size_hint_y=0.28))
         row = BoxLayout(orientation="horizontal", spacing=dp(12),
                         size_hint_y=None, height=dp(52))
         for text, cb, color in buttons:
@@ -1135,7 +1206,8 @@ def toast(parent, text, color=GREEN_DARK, duration=1.6):
     def done(*a):
         if t.parent:
             t.parent.remove_widget(t)
-    anim = (Animation(opacity=1, d=0.15) + Animation(opacity=1, d=duration) +
+    anim = (Animation(opacity=1, d=0.15) +
+            Animation(opacity=1, d=duration) +
             Animation(opacity=0, d=0.3))
     anim.bind(on_complete=done)
     anim.start(t)
@@ -1152,3 +1224,187 @@ class BaseScreen(Screen):
 
     def on_back(self):
         goto("menu")
+
+
+# ============================================================================
+# PAYLAŞIM SİSTEMİ — YENİ
+# ============================================================================
+def make_share_text():
+    """Paylaşılacak metni üretir: isim, puan, oyun adı."""
+    name = save.username or "Bir futbolcu"
+    pts = save.points
+    streak = save.stats.get("best_streak", 0)
+    txt = (
+        "⚽ %s — Futbolum\n"
+        "👤 %s\n"
+        "⭐ Puan: %d\n"
+        "🔥 En iyi seri: %d\n"
+        "\n"
+        "Sen de katıl: Futbolum oyna!"
+    ) % (GAME_NAME, name, pts, streak)
+    return txt
+
+
+def share_via_android(text):
+    """Android'de sistem paylaşım menüsünü açar. Masaüstünde True döner."""
+    try:
+        from jnius import autoclass, cast
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Intent = autoclass("android.content.Intent")
+        String = autoclass("java.lang.String")
+
+        intent = Intent()
+        intent.setAction(Intent.ACTION_SEND)
+        intent.putExtra(Intent.EXTRA_TEXT, cast("java.lang.CharSequence",
+                                                String(text)))
+        intent.setType("text/plain")
+
+        chooser = Intent.createChooser(intent,
+                                       cast("java.lang.CharSequence",
+                                            String("Futbolum'u paylaş")))
+        activity = PythonActivity.mActivity
+        activity.startActivity(chooser)
+        return True
+    except Exception:
+        return False
+
+
+def share_score():
+    """Metni üretir, Android'de paylaşır. Başarılıysa True."""
+    txt = make_share_text()
+    return share_via_android(txt)
+
+
+class SharePopup(FloatLayout):
+    """Havalı paylaşım kartı: avatar + isim + puan + büyük PAYLAŞ butonu."""
+
+    def __init__(self, avatar_widget_factory=None, **kw):
+        super().__init__(**kw)
+        with self.canvas.before:
+            Color(0, 0, 0, 0.82)
+            self._dim = Rectangle()
+        self.bind(pos=self._u, size=self._u)
+
+        # Kart
+        card = BoxLayout(orientation="vertical", size_hint=(None, None),
+                         size=(min(dp(520), Window.width * 0.88),
+                               min(dp(560), Window.height * 0.92)),
+                         pos_hint={"center_x": 0.5, "center_y": 0.5},
+                         padding=dp(20), spacing=dp(10))
+        with card.canvas.before:
+            Color(0, 0, 0, 0.45)
+            self._cs = RoundedRectangle(radius=[dp(26)])
+            # gradyan zemin: yeşil-lacivert
+            Color(0.06, 0.28, 0.20, 1)
+            self._cb = RoundedRectangle(radius=[dp(26)])
+            Color(*GOLD)
+            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(26)),
+                            width=dp(2.5))
+
+        def upd(*a):
+            self._cs.pos = (card.x, card.y - dp(5))
+            self._cs.size = card.size
+            self._cb.pos = card.pos
+            self._cb.size = card.size
+            self._cl.rounded_rectangle = (card.x, card.y, card.width,
+                                          card.height, dp(26))
+        card.bind(pos=upd, size=upd)
+
+        # Üst başlık
+        card.add_widget(TLabel(text="SKORUNU PAYLAŞ",
+                               halign="center", bold=True,
+                               font_size=sp(24), color=GOLD,
+                               size_hint_y=None, height=dp(40)))
+
+        # Avatar (yuvarlak)
+        av_box = FloatLayout(size_hint_y=None, height=dp(160))
+        self.avatar = avatar_widget_factory() if avatar_widget_factory else \
+            RoundPhoto(ring=GOLD, size_hint=(None, None),
+                       size=(dp(140), dp(140)),
+                       pos_hint={"center_x": 0.5, "center_y": 0.5})
+        av_box.add_widget(self.avatar)
+        card.add_widget(av_box)
+
+        # İsim
+        self.name_lbl = TLabel(text=save.username or "Futbolcu",
+                               halign="center", bold=True,
+                               font_size=sp(22), color=WHITE,
+                               size_hint_y=None, height=dp(34))
+        card.add_widget(self.name_lbl)
+
+        # Puan
+        self.pts_lbl = TLabel(text="⭐ %d PUAN" % save.points,
+                              halign="center", bold=True,
+                              font_size=sp(28), color=GOLD,
+                              size_hint_y=None, height=dp(42))
+        card.add_widget(self.pts_lbl)
+
+        # Seri
+        self.streak_lbl = TLabel(
+            text="🔥 En iyi seri: %d" % save.stats.get("best_streak", 0),
+            halign="center", font_size=sp(15),
+            color=(1, 1, 1, 0.85),
+            size_hint_y=None, height=dp(26))
+        card.add_widget(self.streak_lbl)
+
+        # Oyun adı
+        card.add_widget(TLabel(text="— %s —" % GAME_NAME,
+                               halign="center", bold=True,
+                               font_size=sp(18), color=GREEN,
+                               size_hint_y=None, height=dp(32)))
+
+        # Buton satırı
+        row = BoxLayout(orientation="horizontal", spacing=dp(10),
+                        size_hint_y=None, height=dp(56))
+        cancel = RoundedButton(text="KAPAT", bg=NAVY_LIGHT, font_size=sp(15))
+        share = RoundedButton(text="PAYLAŞ", bg=GREEN, font_size=sp(18))
+        cancel.bind(on_release=lambda *a: self.dismiss())
+        share.bind(on_release=lambda *a: self._do_share())
+        row.add_widget(cancel)
+        row.add_widget(share)
+        card.add_widget(row)
+        self.add_widget(card)
+
+    def _u(self, *a):
+        self._dim.pos = self.pos
+        self._dim.size = self.size
+
+    def _do_share(self):
+        ok = share_score()
+        if ok:
+            toast(self.parent or self,
+                  "Paylaşım menüsü açıldı!", GREEN_DARK, 1.4)
+        else:
+            toast(self.parent or self,
+                  "Paylaşım desteklenmiyor, metin kopyalanıyor...",
+                  GOLD_DARK, 1.6)
+            # pano kopyala
+            try:
+                from kivy.core.clipboard import Clipboard
+                Clipboard.copy(make_share_text())
+                toast(self.parent or self, "Metin kopyalandı!", GREEN_DARK, 1.4)
+            except Exception:
+                pass
+
+    def show(self, parent):
+        self.opacity = 0
+        parent.add_widget(self)
+        Animation(opacity=1, d=0.22).start(self)
+
+    def dismiss(self):
+        if self.parent:
+            Animation(opacity=0, d=0.15).start(self)
+            Clock.schedule_once(lambda dt: self.parent.remove_widget(self)
+                                if self.parent else None, 0.16)
+
+    def on_touch_down(self, touch):
+        super().on_touch_down(touch)
+        return True
+
+    def on_touch_move(self, touch):
+        super().on_touch_move(touch)
+        return True
+
+    def on_touch_up(self, touch):
+        super().on_touch_up(touch)
+        return True
