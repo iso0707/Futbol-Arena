@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Penaltı sahnesi için hareketli tribün: zıplayan taraftarlar, atkılar, sallanan
-bayraklar, kamera flaşları. Tek bir Widget; Clock ile ~20 FPS güncellenir."""
+"""Penaltı sahnesi için hareketli tribün + kullanıcı adı pankartı."""
 import math
 import random
 
@@ -8,11 +7,11 @@ from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.graphics import (Color, Ellipse, Line, PopMatrix, PushMatrix, Rectangle,
                            Rotate, RoundedRectangle, Translate)
-from kivy.metrics import dp
+from kivy.metrics import dp, sp
 from kivy.properties import NumericProperty
+from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 
-# Sol blok kırmızı-beyaz, sağ blok mavi-sarı taraftar; arada karışık.
 _HOME = [(0.85, 0.10, 0.15), (0.95, 0.95, 0.95), (0.70, 0.07, 0.12)]
 _AWAY = [(0.12, 0.35, 0.85), (0.98, 0.80, 0.12), (0.10, 0.25, 0.60)]
 _MIX = [(0.10, 0.10, 0.12), (0.15, 0.55, 0.30), (0.90, 0.50, 0.10),
@@ -29,19 +28,26 @@ def _shade(c, f):
 
 
 class CrowdWidget(Widget):
-    excite = NumericProperty(0.35)       # 0 sakin ... 1 çılgın
+    excite = NumericProperty(0.35)
 
-    def __init__(self, **kw):
+    def __init__(self, username="", **kw):
         super().__init__(**kw)
-        self._blocks = []                # [translate, phase, speed, col]
-        self._flags = []                 # [rotate, phase]
-        self._flashes = []               # [color, ellipse]
+        self.username = username or ""
+        self._blocks = []
+        self._flags = []
+        self._flashes = []
+        self._banner = None
+        self._banner_lbl = None
         self._t = 0.0
         self._ev = None
         self._seed = 7
         self.bind(pos=self._rebuild, size=self._rebuild)
 
-    # -- yaşam döngüsü -------------------------------------------------------
+    def set_username(self, name):
+        self.username = name or ""
+        if self._banner_lbl is not None:
+            self._banner_lbl.text = self.username.upper()
+
     def start(self):
         if self._ev is None:
             self._ev = Clock.schedule_interval(self._tick, 1 / 20.0)
@@ -53,47 +59,40 @@ class CrowdWidget(Widget):
         Animation.cancel_all(self, "excite")
 
     def cheer(self):
-        """Gol: tribün çıldırır, sonra yavaşça sakinleşir."""
         Animation.cancel_all(self, "excite")
         (Animation(excite=1.0, d=0.25) + Animation(excite=1.0, d=2.8) +
          Animation(excite=0.35, d=2.0)).start(self)
 
     def groan(self):
-        """Kurtarış / kaçan şut: kısa süreli hayal kırıklığı."""
         Animation.cancel_all(self, "excite")
         (Animation(excite=0.08, d=0.3) + Animation(excite=0.08, d=1.2) +
          Animation(excite=0.35, d=1.5)).start(self)
 
-    # -- çizim ---------------------------------------------------------------
     def _rebuild(self, *a):
         x, y, w, h = self.x, self.y, self.width, self.height
         self.canvas.clear()
         self._blocks, self._flags, self._flashes = [], [], []
         if w <= 0 or h <= 0:
             return
-        rnd = random.Random(self._seed)            # her çizimde aynı kalabalık
-        fs = max(dp(22), w / 38.0)                 # taraftar boyu
-        ad_h = max(dp(14), h * 0.075)              # reklam panosu şeridi
+        rnd = random.Random(self._seed)
+        fs = max(dp(22), w / 38.0)
+        ad_h = max(dp(14), h * 0.075)
         rows = max(5, int((h - ad_h) / (fs * 0.72)))
         step = (h - ad_h) / float(rows)
         cols = int(w / (fs * 0.80)) + 3
         BLOCK = 3
 
         with self.canvas:
-            # tribün zemini
             Color(0.03, 0.05, 0.10, 1)
             Rectangle(pos=(x, y), size=(w, h))
-            # üstte projektör ışığı hissi
             for fx in (0.18, 0.5, 0.82):
                 Color(1, 0.97, 0.85, 0.07)
                 Ellipse(pos=(x + w * fx - w * 0.14, y + h * 0.80), size=(w * 0.28, h * 0.45))
 
-            # arka sıradan öne doğru çiz (öndekiler arkadakileri örter)
             for r in range(rows):
-                depth = r / float(max(1, rows - 1))        # 0 = en arka, 1 = ön
+                depth = r / float(max(1, rows - 1))
                 light = 0.50 + 0.50 * depth
                 base_y = y + ad_h + (rows - 1 - r) * step
-                # basamak çizgisi
                 Color(0.10, 0.13, 0.22, 1)
                 Rectangle(pos=(x, base_y - step * 0.12), size=(w, step * 0.18))
                 stagger = (fs * 0.40) if r % 2 else 0
@@ -146,7 +145,6 @@ class CrowdWidget(Widget):
                     self._blocks.append([tr, rnd.uniform(0, 6.28), rnd.uniform(3.2, 6.5),
                                          first_col / float(cols)])
 
-            # sallanan bayraklar
             for i in range(7):
                 fx = x + w * (0.06 + 0.88 * (i + rnd.uniform(0, 0.6)) / 7.0)
                 fy = y + ad_h + h * rnd.uniform(0.10, 0.45)
@@ -160,7 +158,6 @@ class CrowdWidget(Widget):
                 PopMatrix()
                 self._flags.append([rot, rnd.uniform(0, 6.28)])
 
-            # reklam panoları
             Color(0.02, 0.03, 0.06, 1)
             Rectangle(pos=(x, y), size=(w, ad_h))
             seg = max(dp(60), w / 12.0)
@@ -172,7 +169,6 @@ class CrowdWidget(Widget):
             Color(1, 1, 1, 0.35)
             Rectangle(pos=(x, y + ad_h - dp(1.5)), size=(w, dp(1.5)))
 
-            # kamera flaşları (ömürleri kısa, rastgele yanar)
             for _ in range(16):
                 fx = x + rnd.uniform(0.03, 0.97) * w
                 fy = y + ad_h + rnd.uniform(0.05, 0.92) * (h - ad_h)
@@ -180,7 +176,41 @@ class CrowdWidget(Widget):
                 el = Ellipse(pos=(fx - dp(4), fy - dp(4)), size=(dp(8), dp(8)))
                 self._flashes.append([col, el])
 
-    # -- animasyon -----------------------------------------------------------
+            # KULLANICI ADI PANKARTI
+            if self.username:
+                bw_p = min(w * 0.34, dp(320))
+                bh_p = max(dp(34), h * 0.07)
+                bx_p = x + w * 0.5 - bw_p / 2.0
+                by_p = y + ad_h + (h - ad_h) * 0.58
+                # gölge
+                Color(0, 0, 0, 0.35)
+                Rectangle(pos=(bx_p + dp(2), by_p - dp(2)), size=(bw_p, bh_p))
+                # beyaz zemin
+                Color(0.96, 0.96, 0.96, 1)
+                Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p))
+                # üst ve alt kırmızı şerit
+                Color(0.85, 0.10, 0.15, 1)
+                Rectangle(pos=(bx_p, by_p + bh_p - bh_p * 0.14), size=(bw_p, bh_p * 0.14))
+                Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p * 0.14))
+                self._banner = (bx_p, by_p, bw_p, bh_p)
+                if self._banner_lbl is None:
+                    self._banner_lbl = Label(
+                        text=self.username.upper(), bold=True,
+                        color=(0.05, 0.05, 0.10, 1),
+                        font_size=max(sp(12), bh_p * 0.55),
+                        halign="center", valign="middle",
+                        size_hint=(None, None),
+                        size=(bw_p, bh_p),
+                        pos=(bx_p, by_p))
+                    self._banner_lbl.text_size = (bw_p, bh_p)
+                    self.add_widget(self._banner_lbl)
+                else:
+                    self._banner_lbl.text = self.username.upper()
+                    self._banner_lbl.pos = (bx_p, by_p)
+                    self._banner_lbl.size = (bw_p, bh_p)
+                    self._banner_lbl.text_size = (bw_p, bh_p)
+                    self._banner_lbl.font_size = max(sp(12), bh_p * 0.55)
+
     def _tick(self, dt):
         self._t += dt
         t = self._t
@@ -189,7 +219,7 @@ class CrowdWidget(Widget):
         for blk in self._blocks:
             tr, ph, sp_, col = blk
             s = math.sin(t * sp_ * (0.7 + self.excite * 0.9) + ph + col * 5.0 * wave)
-            tr.y = amp * (s if s > 0 else s * 0.15)      # yukarı zıpla, aşağıda bekle
+            tr.y = amp * (s if s > 0 else s * 0.15)
         for fl in self._flags:
             fl[0].angle = math.sin(t * 2.4 + fl[1]) * (6 + 10 * self.excite)
         for col, el in self._flashes:
@@ -197,3 +227,8 @@ class CrowdWidget(Widget):
                 col.a *= 0.55
             elif random.random() < 0.012 + 0.03 * self.excite:
                 col.a = 1.0
+        # pankart sallanması
+        if self._banner_lbl and self._banner:
+            bx, by, bw_p, bh_p = self._banner
+            sway = math.sin(t * 1.8) * dp(3)
+            self._banner_lbl.pos = (bx + sway, by + abs(math.sin(t * 2.2)) * dp(2))

@@ -1,43 +1,32 @@
 # -*- coding: utf-8 -*-
-"""Kalıcı kayıt sistemi.
-
-- JSON dosyası uygulamanın özel veri klasöründe saklanır (Android'de silinmez).
-- Atomik yazma: önce geçici dosyaya yazılır, sonra yer değiştirilir.
-- Her yazımdan önce eski kayıt .bak olarak yedeklenir; ana dosya bozulursa yedek okunur.
-- Her değişiklik anında diske yazılır ve dinleyicilere (üst bar vb.) bildirilir.
-"""
+"""Kalıcı kayıt sistemi."""
 import copy
 import json
 import os
 import shutil
 import tempfile
 import threading
+import time
 
 DEFAULT_DATA = {
     "version": 1,
     "username": "",
+    "created_at": 0,
     "points": 0,
     "owned": ["starter"],
     "selected_avatar": "starter",
+    "starter": "",
     "special_penalty_rights": 0,
     "stats": {
-        "correct": 0,
-        "wrong": 0,
-        "best_streak": 0,
-        "easy_correct": 0,
-        "hard_correct": 0,
-        "games_played": 0,
-        "penalty_shots": 0,
-        "penalty_goals": 0,
-        "penalty_saved": 0,
-        "penalty_missed": 0,
-        "special_goals": 0,
+        "correct": 0, "wrong": 0, "best_streak": 0,
+        "easy_correct": 0, "hard_correct": 0, "games_played": 0,
+        "penalty_shots": 0, "penalty_goals": 0, "penalty_saved": 0,
+        "penalty_missed": 0, "special_goals": 0,
     },
 }
 
 
 def _merge(defaults, raw):
-    """Eksik/bozuk alanları varsayılanlarla tamamlar, tipleri doğrular."""
     if not isinstance(raw, dict):
         raw = {}
     out = {}
@@ -67,7 +56,6 @@ class SaveSystem:
         self._lock = threading.RLock()
         self._listeners = []
 
-    # ------------------------------------------------------------ yükleme
     def init(self, directory):
         os.makedirs(directory, exist_ok=True)
         self.path = os.path.join(directory, "save.json")
@@ -97,8 +85,9 @@ class SaveSystem:
         d["owned"] = list(dict.fromkeys(d["owned"]))
         if d["selected_avatar"] not in d["owned"]:
             d["selected_avatar"] = "starter"
+        if not d.get("created_at"):
+            d["created_at"] = int(time.time())
 
-    # ------------------------------------------------------------ yazma
     def flush(self):
         if not self.path:
             return False
@@ -131,7 +120,6 @@ class SaveSystem:
         self.flush()
         self._notify()
 
-    # ------------------------------------------------------------ dinleyiciler
     def subscribe(self, fn):
         if fn not in self._listeners:
             self._listeners.append(fn)
@@ -147,10 +135,17 @@ class SaveSystem:
             except Exception:
                 pass
 
-    # ------------------------------------------------------------ okuma
     @property
     def username(self):
         return self.data["username"]
+
+    @property
+    def created_at(self):
+        return self.data.get("created_at", 0)
+
+    @property
+    def starter(self):
+        return self.data["starter"]
 
     @property
     def points(self):
@@ -175,10 +170,16 @@ class SaveSystem:
     def owns(self, pid):
         return pid in self.data["owned"]
 
-    # ------------------------------------------------------------ işlemler
     def set_username(self, name):
         with self._lock:
             self.data["username"] = name.strip()
+            if not self.data.get("created_at"):
+                self.data["created_at"] = int(time.time())
+            self._commit()
+
+    def set_starter(self, name):
+        with self._lock:
+            self.data["starter"] = name
             self._commit()
 
     def add_points(self, n):
@@ -187,7 +188,6 @@ class SaveSystem:
             self._commit()
 
     def buy_player(self, pid, price):
-        """(başarılı_mı, neden) döndürür. Puan düşme + koleksiyona ekleme tek adımda."""
         with self._lock:
             if pid in self.data["owned"]:
                 return False, "owned"
@@ -195,6 +195,7 @@ class SaveSystem:
                 return False, "points"
             self.data["points"] -= price
             self.data["owned"].append(pid)
+            self.data["selected_avatar"] = pid
             self._commit()
             return True, "ok"
 
@@ -230,8 +231,6 @@ class SaveSystem:
             self._commit()
 
     def record_penalty(self, outcome, special=False):
-        """outcome: 'goal' | 'saved' | 'miss'. Verilen puanı döndürür.
-        Puan ekleme, hak tüketme ve istatistik tek kayıt işleminde yapılır."""
         gained = 0
         with self._lock:
             s = self.data["stats"]
@@ -247,6 +246,9 @@ class SaveSystem:
                 self.data["points"] += gained
             elif outcome == "saved":
                 s["penalty_saved"] += 1
+                if self.data["points"] > 0:
+                    self.data["points"] -= 1
+                    gained = -1
             else:
                 s["penalty_missed"] += 1
             self._commit()
