@@ -16,6 +16,7 @@ DEFAULT_DATA = {
     "owned": ["starter"],
     "selected_avatar": "starter",
     "starter": "",
+    "starter_is_self": False,
     "special_penalty_rights": 0,
     "stats": {
         "correct": 0, "wrong": 0, "best_streak": 0,
@@ -148,6 +149,10 @@ class SaveSystem:
         return self.data["starter"]
 
     @property
+    def starter_is_self(self):
+        return bool(self.data.get("starter_is_self", False))
+
+    @property
     def points(self):
         return self.data["points"]
 
@@ -177,9 +182,10 @@ class SaveSystem:
                 self.data["created_at"] = int(time.time())
             self._commit()
 
-    def set_starter(self, name):
+    def set_starter(self, name, is_self=False):
         with self._lock:
             self.data["starter"] = name
+            self.data["starter_is_self"] = bool(is_self)
             self._commit()
 
     def add_points(self, n):

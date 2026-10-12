@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Ortak arayüz parçaları: tema, butonlar, üst bar, avatar, fotoğraf yöneticisi."""
+"""Ortak arayüz: tema, butonlar, üst bar, avatar, fotoğraf yöneticisi, yuvarlak foto."""
 import json
 import os
 import re
@@ -15,8 +15,7 @@ from kivy.animation import Animation
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import (Color, Ellipse, Line, Rectangle, RoundedRectangle,
-                           StencilPop, StencilPush, StencilUnUse, StencilUse)
+from kivy.graphics import (Color, Ellipse, Line, Rectangle, RoundedRectangle)
 from kivy.graphics.texture import Texture
 from kivy.metrics import dp, sp
 from kivy.properties import ListProperty, NumericProperty
@@ -55,22 +54,27 @@ def goto(name):
     App.get_running_app().sm.current = name
 
 
+def start_screen():
+    if not save.username:
+        return "username"
+    if not save.starter:
+        return "starter"
+    return "menu"
+
+
 # ----------------------------------------------------------------------------
-# SES (dosya yoksa sessizce atlanır)
+# SES
 # ----------------------------------------------------------------------------
 _sound_cache = {}
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Sesler/müzikler bu klasörlerden herhangi birine konabilir:
 _SOUND_DIRS = [os.path.join(_BASE_DIR, "sounds"), asset_path("sounds"),
                os.path.join(_BASE_DIR, "music"), asset_path("music")]
-
 
 _EFFECTS = ("buy", "correct", "goal", "save", "wrong", "taraftar")
 _EXTS = (".mp3", ".ogg", ".wav")
 
 
 def _audio_files():
-    """Ses klasörlerindeki tüm ses dosyaları: [(klasör, dosya_adı), ...]"""
     out = []
     for d in _SOUND_DIRS:
         try:
@@ -88,7 +92,6 @@ def find_sound(name):
             p = os.path.join(d, "%s.%s" % (name, ext))
             if os.path.isfile(p):
                 return p
-    # büyük/küçük harf farkı (Music.MP3 gibi) için
     for d, f in _audio_files():
         if os.path.splitext(f)[0].lower() == name.lower():
             return os.path.join(d, f)
@@ -96,7 +99,6 @@ def find_sound(name):
 
 
 def _extra_music():
-    """music.mp3 yoksa: efekt olmayan ilk ses dosyasını genel müzik say."""
     for d, f in _audio_files():
         stem = os.path.splitext(f)[0].lower()
         if stem not in _EFFECTS:
@@ -121,7 +123,6 @@ def play_sound(name):
         pass
 
 
-# -- arka plan müziği --------------------------------------------------------
 _music = {"name": None, "snd": None, "status": "Müzik: henüz başlamadı"}
 MUSIC_VOLUME = 0.45
 
@@ -142,8 +143,6 @@ def stop_music():
 
 
 def play_music(*names):
-    """Verilen isimlerden dosyası olan İLK müziği döngüde çalar.
-    Zaten o müzik çalıyorsa yeniden başlatmaz. Hiçbiri yoksa sessiz kalır."""
     try:
         cand = None
         for n in names:
@@ -166,7 +165,7 @@ def play_music(*names):
         from kivy.core.audio import SoundLoader
         snd = SoundLoader.load(path)
         if not snd:
-            _music["status"] = "Müzik yüklenemedi (format?): " + os.path.basename(path)
+            _music["status"] = "Müzik yüklenemedi: " + os.path.basename(path)
             return
         snd.loop = True
         snd.volume = MUSIC_VOLUME
@@ -191,7 +190,7 @@ def gradient_texture(top, bottom, steps=64):
     tex = Texture.create(size=(1, steps), colorfmt="rgba")
     buf = bytearray()
     for i in range(steps):
-        t = i / float(steps - 1)          # satır 0 = alt
+        t = i / float(steps - 1)
         for k in range(3):
             v = bottom[k] + (top[k] - bottom[k]) * t
             buf.append(max(0, min(255, int(v * 255))))
@@ -204,8 +203,6 @@ def gradient_texture(top, bottom, steps=64):
 
 
 class Background(Widget):
-    """Lacivert gradyan + silik saha çizgileri."""
-
     def __init__(self, top=NAVY, bottom=NAVY_DARK, **kw):
         super().__init__(**kw)
         with self.canvas:
@@ -231,8 +228,6 @@ class Background(Widget):
 # TEMEL BİLEŞENLER
 # ----------------------------------------------------------------------------
 class TLabel(Label):
-    """Metni kendi boyutuna göre hizalayan etiket."""
-
     def __init__(self, **kw):
         kw.setdefault("halign", "left")
         kw.setdefault("valign", "middle")
@@ -246,7 +241,6 @@ class TLabel(Label):
 
 
 class RoundedButton(Button):
-    """Yuvarlatılmış, gölgeli, basma efektli buton."""
     bg = ListProperty(list(GREEN))
 
     def __init__(self, **kw):
@@ -340,7 +334,7 @@ class BarWidget(Widget):
 
 
 # ----------------------------------------------------------------------------
-# AVATAR (çizimle oluşturulan 2D/yarı-3D futbolcu)
+# ÇİZİMLİ AVATAR
 # ----------------------------------------------------------------------------
 _KITS = [
     ((0.86, 0.12, 0.18), (1.00, 1.00, 1.00)),
@@ -352,8 +346,10 @@ _KITS = [
     ((0.06, 0.06, 0.12), (0.90, 0.20, 0.20)),
     ((0.95, 0.45, 0.10), (0.10, 0.10, 0.10)),
 ]
-_SKINS = [(0.96, 0.80, 0.66), (0.86, 0.66, 0.50), (0.62, 0.42, 0.30), (0.42, 0.28, 0.20)]
-_HAIRS = [(0.10, 0.07, 0.05), (0.35, 0.22, 0.10), (0.80, 0.65, 0.30), (0.04, 0.04, 0.04)]
+_SKINS = [(0.96, 0.80, 0.66), (0.86, 0.66, 0.50), (0.62, 0.42, 0.30),
+          (0.42, 0.28, 0.20)]
+_HAIRS = [(0.10, 0.07, 0.05), (0.35, 0.22, 0.10), (0.80, 0.65, 0.30),
+          (0.04, 0.04, 0.04)]
 
 
 def kit_for(key):
@@ -398,7 +394,6 @@ class AvatarWidget(Widget):
         with c:
             Color(0, 0, 0, 0.35)
             Ellipse(pos=(cx - 0.28 * H, y0 - 0.015 * H), size=(0.56 * H, 0.07 * H))
-            # bacaklar
             Color(*skin)
             for dx in (-0.12, 0.04):
                 RoundedRectangle(pos=(cx + dx * H, y0 + lift + 0.05 * H),
@@ -411,16 +406,13 @@ class AvatarWidget(Widget):
             for dx in (-0.14, 0.03):
                 RoundedRectangle(pos=(cx + dx * H, y0 + lift),
                                  size=(0.11 * H, 0.06 * H), radius=[dp(4)])
-            # şort
             Color(*shorts)
             RoundedRectangle(pos=(cx - 0.15 * H, y0 + lift + 0.28 * H),
                              size=(0.30 * H, 0.18 * H), radius=[dp(5)])
-            # kollar
             Color(*skin)
             for dx in (-0.245, 0.175):
                 RoundedRectangle(pos=(cx + dx * H, y0 + lift + 0.46 * H),
                                  size=(0.07 * H, 0.26 * H), radius=[dp(4)])
-            # forma
             Color(*shirt)
             RoundedRectangle(pos=(cx - 0.17 * H, y0 + lift + 0.44 * H),
                              size=(0.34 * H, 0.31 * H), radius=[dp(10)])
@@ -430,45 +422,47 @@ class AvatarWidget(Widget):
             Color(1, 1, 1, 0.14)
             RoundedRectangle(pos=(cx - 0.17 * H, y0 + lift + 0.60 * H),
                              size=(0.17 * H, 0.15 * H), radius=[dp(10), 0, 0, 0])
-            # boyun + kafa
             Color(*skin)
-            Rectangle(pos=(cx - 0.03 * H, y0 + lift + 0.73 * H), size=(0.06 * H, 0.05 * H))
-            Ellipse(pos=(cx - 0.10 * H, y0 + lift + 0.76 * H), size=(0.20 * H, 0.21 * H))
+            Rectangle(pos=(cx - 0.03 * H, y0 + lift + 0.73 * H),
+                      size=(0.06 * H, 0.05 * H))
+            Ellipse(pos=(cx - 0.10 * H, y0 + lift + 0.76 * H),
+                    size=(0.20 * H, 0.21 * H))
             Color(*hair)
-            Ellipse(pos=(cx - 0.105 * H, y0 + lift + 0.865 * H), size=(0.21 * H, 0.11 * H))
+            Ellipse(pos=(cx - 0.105 * H, y0 + lift + 0.865 * H),
+                    size=(0.21 * H, 0.11 * H))
         self.num.font_size = max(sp(8), H * 0.12)
         self.num.center = (cx, y0 + lift + 0.60 * H)
 
 
 # ----------------------------------------------------------------------------
-# GERÇEK YÜZ (mağaza kartları + ana menü avatarı)
+# GERÇEK YÜZ
 # ----------------------------------------------------------------------------
 _face_tex_cache = {}
+_face_base_keep = {}
 
 
 def _face_texture(path):
-    """Fotoğrafın yüzün olduğu üst kare bölgesini kırpılmış doku olarak verir."""
     tex = _face_tex_cache.get(path)
     if tex is not None:
         return tex
     from kivy.core.image import Image as CoreImage
-    base = CoreImage(path).texture
+    base = CoreImage(path, nocache=True).texture
     tw, th = base.size
     side = min(tw, th)
     x0 = (tw - side) / 2.0
-    y0 = th - side                       # portre: üst kare (yüz+omuz); manzara: orta
+    y0 = th - side
     if tw > th:
         y0 = 0
     tex = base.get_region(x0, y0, side, side)
-    if len(_face_tex_cache) > 160:
+    if len(_face_tex_cache) > 70:
         _face_tex_cache.clear()
+        _face_base_keep.clear()
+    _face_base_keep[path] = base
     _face_tex_cache[path] = tex
     return tex
 
 
 class FaceDisc(Widget):
-    """Yuvarlak kırpılmış futbolcu fotoğrafı + yeşil çerçeve."""
-
     def __init__(self, ring=GREEN, **kw):
         super().__init__(**kw)
         self.ring = ring
@@ -489,21 +483,13 @@ class FaceDisc(Widget):
         with self.canvas:
             Color(0, 0, 0, 0.35)
             Ellipse(pos=(x, y - dp(3)), size=(d, d))
-            StencilPush()
-            Ellipse(pos=(x, y), size=(d, d))
-            StencilUse()
             Color(1, 1, 1, 1)
-            Rectangle(texture=self.tex, pos=(x, y), size=(d, d))
-            StencilUnUse()
-            Ellipse(pos=(x, y), size=(d, d))
-            StencilPop()
+            Ellipse(texture=self.tex, pos=(x, y), size=(d, d))
             Color(*self.ring)
             Line(circle=(self.center_x, self.center_y, d / 2.0), width=dp(2.2))
 
 
 class FaceAvatar(FloatLayout):
-    """Futbolcunun gerçek yüzünü gösterir. Fotoğraf inene / bulunamazsa çizimli
-    avatar görünür. `bob` özelliği ana menüdeki hafif zıplama animasyonu içindir."""
     bob = NumericProperty(0)
 
     def __init__(self, pid="starter", lazy=False, **kw):
@@ -515,53 +501,279 @@ class FaceAvatar(FloatLayout):
         self._wiki = None
         self._name = None
         self.fallback = AvatarWidget(pid, size_hint=(1, 1))
-        self.disc = FaceDisc(size_hint=(1, 1))
+        self.img = _make_image()
+        self.img.size_hint = (0.98, 0.98)
+        self.img.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+        self.img.opacity = 0
         self.add_widget(self.fallback)
-        self.add_widget(self.disc)
+        self.add_widget(self.img)
         self.bind(bob=self._on_bob)
         self.set_player(pid, lazy=lazy)
 
     def _on_bob(self, *a):
-        self.disc.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
+        self.img.pos_hint = {"center_x": 0.5, "center_y": 0.5 + self.bob * 0.015}
         self.fallback.bob = self.bob
         self.do_layout()
+
+    def _reset(self):
+        self._token += 1
+        self._loaded = False
+        self._retry_at = 0
+        self.img.opacity = 0
+        self.img.source = ""
+        self.fallback.opacity = 1
 
     def set_player(self, pid, lazy=False):
         from player_data import get_player
         p = get_player(pid)
-        self._token += 1
+        self._reset()
         self.pid = p.id
         self._wiki = p.wiki
         self._name = p.name
-        self._loaded = False
-        self.disc.set_texture(None)
-        self.fallback.opacity = 1
         self.fallback.set_player(p.id)
         if p.wiki and not lazy:
             self.ensure_loaded()
 
+    def set_player_by_name(self, name):
+        from player_data import slugify, STARTER_CHOICES
+        self._reset()
+        self._name = name
+        self._wiki = dict(STARTER_CHOICES).get(name, name)
+        self.fallback.set_player(slugify(name))
+
+    def unload(self):
+        if self._loaded:
+            self._reset()
+
     def ensure_loaded(self):
-        """Fotoğrafı (yerel / önbellek / internet) yükle. Birden çok çağrı güvenli."""
         if self._loaded or not self._wiki or time.time() < self._retry_at:
             return
         self._loaded = True
         tok = self._token
         from player_data import slugify
-        slug = slugify(self._name)
-        photos.request(slug, self._wiki, lambda path, tok=tok: self._got(tok, path), self._name)
+        photos.request(slugify(self._name), self._wiki,
+                       lambda path, tok=tok: self._got(tok, path), self._name)
 
     def _got(self, tok, path):
         if tok != self._token:
             return
         if not path:
-            self._loaded = False         # 30 sn sonra yeniden denensin
+            self._loaded = False
             self._retry_at = time.time() + 30
             return
         try:
-            self.disc.set_texture(_face_texture(path))
+            self.img.source = path
+            if self.img.texture is None:
+                raise ValueError("doku yok")
+            self.img.opacity = 1
             self.fallback.opacity = 0
         except Exception:
+            self.img.source = ""
+            self.img.opacity = 0
+            self.fallback.opacity = 1
             self._loaded = False
+            self._retry_at = time.time() + 30
+
+
+# ----------------------------------------------------------------------------
+# YUVARLAK FOTOĞRAF
+# ----------------------------------------------------------------------------
+class RoundPhoto(Widget):
+    """Yuvarlak maskeli fotoğraf."""
+    _cache = {}
+
+    def __init__(self, ring=GREEN, ring_w=2.2, **kw):
+        super().__init__(**kw)
+        self.ring = ring
+        self.ring_w = ring_w
+        self.tex = None
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def set_path(self, path):
+        if not path or not os.path.isfile(path):
+            self.tex = None
+            self.redraw()
+            return False
+        try:
+            key = (path, os.path.getmtime(path))
+            tex = RoundPhoto._cache.get(key)
+            if tex is None:
+                from kivy.core.image import Image as CoreImage
+                base = CoreImage(path, nocache=False).texture
+                tw, th = base.size
+                side = min(tw, th)
+                x0 = (tw - side) / 2.0
+                y0 = (th - side) / 2.0
+                if th > tw:
+                    y0 = th - side
+                tex = base.get_region(x0, y0, side, side)
+                if len(RoundPhoto._cache) > 200:
+                    RoundPhoto._cache.clear()
+                RoundPhoto._cache[key] = tex
+            self.tex = tex
+            self.redraw()
+            return True
+        except Exception:
+            self.tex = None
+            self.redraw()
+            return False
+
+    def set_texture(self, tex):
+        self.tex = tex
+        self.redraw()
+
+    def redraw(self, *a):
+        self.canvas.clear()
+        if self.width <= 0 or self.height <= 0:
+            return
+        d = min(self.width, self.height)
+        x = self.center_x - d / 2.0
+        y = self.center_y - d / 2.0
+        with self.canvas:
+            Color(0, 0, 0, 0.35)
+            Ellipse(pos=(x, y - dp(3)), size=(d, d))
+            if self.tex is not None:
+                Color(*self.ring)
+                Ellipse(pos=(x, y), size=(d, d))
+                inner = d - dp(self.ring_w * 4)
+                ix = self.center_x - inner / 2.0
+                iy = self.center_y - inner / 2.0
+                Color(1, 1, 1, 1)
+                Ellipse(texture=self.tex, pos=(ix, iy), size=(inner, inner))
+            else:
+                Color(*NAVY_LIGHT)
+                Ellipse(pos=(x, y), size=(d, d))
+                Color(*self.ring)
+                Line(circle=(self.center_x, self.center_y, d / 2.0 - dp(1)),
+                     width=dp(self.ring_w))
+
+
+# ----------------------------------------------------------------------------
+# KENDİ FOTOĞRAFINI EKLE
+# ----------------------------------------------------------------------------
+def user_photo_dir():
+    d = os.path.join(ASSETS_DIR, "user_photos")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def user_photo_path():
+    d = user_photo_dir()
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        p = os.path.join(d, "me.%s" % ext)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def copy_user_photo(source):
+    import shutil
+    if not source or not os.path.isfile(source):
+        return None
+    ext = os.path.splitext(source)[1].lower() or ".png"
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        ext = ".png"
+    for old in ("me.png", "me.jpg", "me.jpeg", "me.webp"):
+        p = os.path.join(user_photo_dir(), old)
+        if os.path.isfile(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    dst = os.path.join(user_photo_dir(), "me%s" % ext)
+    try:
+        shutil.copy2(source, dst)
+        RoundPhoto._cache.clear()
+        return dst
+    except Exception:
+        return None
+
+
+class PhotoPickerPopup(FloatLayout):
+    def __init__(self, on_pick, **kw):
+        super().__init__(**kw)
+        with self.canvas.before:
+            Color(0, 0, 0, 0.80)
+            self._dim = Rectangle()
+        self.bind(pos=self._u, size=self._u)
+
+        from kivy.uix.filechooser import FileChooserListView
+        card = BoxLayout(orientation="vertical", size_hint=(None, None),
+                         size=(min(dp(720), Window.width * 0.92),
+                               min(dp(540), Window.height * 0.90)),
+                         pos_hint={"center_x": 0.5, "center_y": 0.5},
+                         padding=dp(12), spacing=dp(8))
+        with card.canvas.before:
+            Color(0, 0, 0, 0.4)
+            self._cs = RoundedRectangle(radius=[dp(18)])
+            Color(*NAVY_LIGHT)
+            self._cb = RoundedRectangle(radius=[dp(18)])
+            Color(*GREEN)
+            self._cl = Line(rounded_rectangle=(0, 0, 1, 1, dp(18)), width=dp(2))
+
+        def upd(*a):
+            self._cs.pos = (card.x, card.y - dp(4))
+            self._cs.size = card.size
+            self._cb.pos = card.pos
+            self._cb.size = card.size
+            self._cl.rounded_rectangle = (card.x, card.y, card.width,
+                                          card.height, dp(18))
+        card.bind(pos=upd, size=upd)
+
+        card.add_widget(TLabel(text="KENDİ FOTOĞRAFINI SEÇ",
+                               halign="center", bold=True, font_size=sp(20),
+                               color=GREEN, size_hint_y=None, height=dp(34)))
+        try:
+            start_dir = os.path.expanduser("~")
+            if not os.path.isdir(start_dir):
+                start_dir = "/"
+        except Exception:
+            start_dir = "/"
+        self.fc = FileChooserListView(
+            path=start_dir,
+            filters=["*.png", "*.jpg", "*.jpeg", "*.webp"])
+        card.add_widget(self.fc)
+        row = BoxLayout(orientation="horizontal", spacing=dp(10),
+                        size_hint_y=None, height=dp(50))
+        ok = RoundedButton(text="BUNU KULLAN", bg=GREEN, font_size=sp(16))
+        cancel = RoundedButton(text="İPTAL", bg=NAVY_LIGHT, font_size=sp(16))
+        ok.bind(on_release=lambda *a: self._pick(on_pick))
+        cancel.bind(on_release=lambda *a: self._close())
+        row.add_widget(ok)
+        row.add_widget(cancel)
+        card.add_widget(row)
+        self.add_widget(card)
+
+    def _u(self, *a):
+        self._dim.pos = self.pos
+        self._dim.size = self.size
+
+    def _pick(self, cb):
+        sel = self.fc.selection
+        if sel:
+            cb(sel[0])
+        self._close()
+
+    def _close(self):
+        if self.parent:
+            self.parent.remove_widget(self)
+
+    def show(self, parent):
+        self.opacity = 0
+        parent.add_widget(self)
+        Animation(opacity=1, d=0.2).start(self)
+
+    def on_touch_down(self, touch):
+        super().on_touch_down(touch)
+        return True
+
+    def on_touch_move(self, touch):
+        super().on_touch_move(touch)
+        return True
+
+    def on_touch_up(self, touch):
+        super().on_touch_up(touch)
+        return True
 
 
 # ----------------------------------------------------------------------------
@@ -582,12 +794,6 @@ def _ssl_context():
 
 
 class PhotoManager:
-    """Fotoğraf arama sırası:
-    1) assets/players/<slug>.jpg|png  (kendi fotoğraflarınız)
-    2) önbellek (daha önce indirilmiş)
-    3) Wikipedia'dan indir (internet gerekir)
-    4) başarısızsa None -> arayüz varsayılan görseli gösterir
-    """
     UA = "FutbolArena/1.0 (mobile quiz game; Kivy)"
 
     def __init__(self):
@@ -616,7 +822,6 @@ class PhotoManager:
         return None
 
     def request(self, slug, wiki, callback, name=None):
-        """callback(path_or_None) ana iş parçacığında çağrılır."""
         path = self.find_local(slug)
         if path:
             Clock.schedule_once(lambda dt: callback(path), 0)
@@ -649,17 +854,19 @@ class PhotoManager:
         for cb in cbs:
             Clock.schedule_once(lambda dt, cb=cb: cb(path), 0)
 
-    # -- ağ yardımcıları ------------------------------------------------
     def _get(self, url, timeout=8):
-        req = urllib.request.Request(url, headers={"User-Agent": self.UA, "Accept": "*/*"})
-        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": self.UA, "Accept": "*/*"})
+        with urllib.request.urlopen(req, timeout=timeout,
+                                    context=_ssl_context()) as r:
             return r.read()
 
     @staticmethod
     def _thumb_from_summary(j):
         if j.get("type") == "disambiguation":
             return None
-        txt = ((j.get("description") or "") + " " + (j.get("extract") or "")[:240]).lower()
+        txt = ((j.get("description") or "") + " " +
+               (j.get("extract") or "")[:240]).lower()
         if not any(k in txt for k in ("footbal", "soccer", "goalkeeper")):
             return None
         return (j.get("thumbnail") or {}).get("source")
@@ -725,8 +932,6 @@ def _make_image():
 
 
 class PlayerPhoto(FloatLayout):
-    """Büyük futbolcu fotoğrafı; yüklenemezse düzgün varsayılan görsel."""
-
     def __init__(self, **kw):
         super().__init__(**kw)
         r = dp(20)
@@ -787,13 +992,14 @@ class PlayerPhoto(FloatLayout):
 
 
 # ----------------------------------------------------------------------------
-# ÜST BAR (kullanıcı adı + puan) - her ekranda sol üstte
+# ÜST BAR
 # ----------------------------------------------------------------------------
 class HeaderBar(BoxLayout):
     def __init__(self, **kw):
         super().__init__(orientation="horizontal", size_hint=(None, None),
                          size=(dp(310), dp(46)),
-                         padding=[dp(14), dp(5), dp(10), dp(5)], spacing=dp(6), **kw)
+                         padding=[dp(14), dp(5), dp(10), dp(5)],
+                         spacing=dp(6), **kw)
         with self.canvas.before:
             Color(0.02, 0.05, 0.13, 0.82)
             self._bg = RoundedRectangle(radius=[dp(23)])
@@ -815,7 +1021,8 @@ class HeaderBar(BoxLayout):
     def _upd(self, *a):
         self._bg.pos = self.pos
         self._bg.size = self.size
-        self._bd.rounded_rectangle = (self.x, self.y, self.width, self.height, dp(23))
+        self._bd.rounded_rectangle = (self.x, self.y, self.width,
+                                      self.height, dp(23))
 
     def refresh(self, *a):
         self.name_lbl.text = save.username
@@ -829,7 +1036,7 @@ class HeaderBar(BoxLayout):
 
 
 # ----------------------------------------------------------------------------
-# OVERLAY (sonuç/kutlama ekranları) ve TOAST
+# OVERLAY ve TOAST
 # ----------------------------------------------------------------------------
 class Overlay(FloatLayout):
     def __init__(self, title, subtitle="", buttons=(), title_color=WHITE, **kw):
@@ -842,7 +1049,8 @@ class Overlay(FloatLayout):
         cw = min(dp(560), Window.width * 0.84)
         ch = min(dp(290), Window.height * 0.80)
         card = BoxLayout(orientation="vertical", size_hint=(None, None),
-                         size=(cw, ch), pos_hint={"center_x": 0.5, "center_y": 0.5},
+                         size=(cw, ch),
+                         pos_hint={"center_x": 0.5, "center_y": 0.5},
                          padding=dp(20), spacing=dp(10))
         with card.canvas.before:
             Color(0, 0, 0, 0.4)
@@ -857,17 +1065,19 @@ class Overlay(FloatLayout):
             self._cs.size = card.size
             self._cb.pos = card.pos
             self._cb.size = card.size
-            self._cl.rounded_rectangle = (card.x, card.y, card.width, card.height, dp(24))
+            self._cl.rounded_rectangle = (card.x, card.y, card.width,
+                                          card.height, dp(24))
         card.bind(pos=upd, size=upd)
 
         card.add_widget(TLabel(text=title, halign="center", bold=True,
                                font_size=sp(30 if len(title) < 22 else 24),
                                color=title_color, size_hint_y=0.42))
         if subtitle:
-            card.add_widget(TLabel(text=subtitle, halign="center", font_size=sp(16),
+            card.add_widget(TLabel(text=subtitle, halign="center",
+                                   font_size=sp(16),
                                    color=(1, 1, 1, 0.9), size_hint_y=0.28))
-        row = BoxLayout(orientation="horizontal", spacing=dp(12), size_hint_y=None,
-                        height=dp(52))
+        row = BoxLayout(orientation="horizontal", spacing=dp(12),
+                        size_hint_y=None, height=dp(52))
         for text, cb, color in buttons:
             b = RoundedButton(text=text, bg=color, font_size=sp(16))
             b.bind(on_release=lambda inst, cb=cb: cb())

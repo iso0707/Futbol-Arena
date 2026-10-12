@@ -36,7 +36,6 @@ class CrowdWidget(Widget):
         self._blocks = []
         self._flags = []
         self._flashes = []
-        self._banner = None
         self._banner_lbl = None
         self._t = 0.0
         self._ev = None
@@ -87,7 +86,8 @@ class CrowdWidget(Widget):
             Rectangle(pos=(x, y), size=(w, h))
             for fx in (0.18, 0.5, 0.82):
                 Color(1, 0.97, 0.85, 0.07)
-                Ellipse(pos=(x + w * fx - w * 0.14, y + h * 0.80), size=(w * 0.28, h * 0.45))
+                Ellipse(pos=(x + w * fx - w * 0.14, y + h * 0.80),
+                        size=(w * 0.28, h * 0.45))
 
             for r in range(rows):
                 depth = r / float(max(1, rows - 1))
@@ -105,7 +105,8 @@ class CrowdWidget(Widget):
                     for _ in range(BLOCK):
                         if c >= cols:
                             break
-                        fx = x + c * fs * 0.80 - fs * 0.4 + stagger + rnd.uniform(-fs * 0.06, fs * 0.06)
+                        fx = (x + c * fs * 0.80 - fs * 0.4 + stagger +
+                              rnd.uniform(-fs * 0.06, fs * 0.06))
                         sec = fx / float(w)
                         roll = rnd.random()
                         if roll < 0.70:
@@ -125,24 +126,30 @@ class CrowdWidget(Widget):
                             Color(*skin)
                             aw = size_f * 0.11
                             ah = size_f * 0.62
-                            Rectangle(pos=(fx - aw * 0.4, fy + bh * 0.45), size=(aw, ah))
-                            Rectangle(pos=(fx + bw - aw * 0.6, fy + bh * 0.45), size=(aw, ah))
+                            Rectangle(pos=(fx - aw * 0.4, fy + bh * 0.45),
+                                      size=(aw, ah))
+                            Rectangle(pos=(fx + bw - aw * 0.6, fy + bh * 0.45),
+                                      size=(aw, ah))
                         if scarf:
                             Color(*_shade(rnd.choice(_HOME + _AWAY), light))
-                            Rectangle(pos=(fx - size_f * 0.12, fy + bh * 0.45 + size_f * 0.60),
+                            Rectangle(pos=(fx - size_f * 0.12,
+                                           fy + bh * 0.45 + size_f * 0.60),
                                       size=(bw + size_f * 0.24, size_f * 0.13))
                         Color(*shirt)
-                        RoundedRectangle(pos=(fx, fy), size=(bw, bh), radius=[size_f * 0.2])
+                        RoundedRectangle(pos=(fx, fy), size=(bw, bh),
+                                         radius=[size_f * 0.2])
                         Color(*skin)
                         hs = size_f * 0.44
                         hx = fx + (bw - hs) / 2.0
                         hy = fy + bh - hs * 0.12
                         Ellipse(pos=(hx, hy), size=(hs, hs * 1.08))
                         Color(*hair)
-                        Ellipse(pos=(hx - hs * 0.02, hy + hs * 0.55), size=(hs * 1.04, hs * 0.58))
+                        Ellipse(pos=(hx - hs * 0.02, hy + hs * 0.55),
+                                size=(hs * 1.04, hs * 0.58))
                         c += 1
                     PopMatrix()
-                    self._blocks.append([tr, rnd.uniform(0, 6.28), rnd.uniform(3.2, 6.5),
+                    self._blocks.append([tr, rnd.uniform(0, 6.28),
+                                         rnd.uniform(3.2, 6.5),
                                          first_col / float(cols)])
 
             for i in range(7):
@@ -176,23 +183,19 @@ class CrowdWidget(Widget):
                 el = Ellipse(pos=(fx - dp(4), fy - dp(4)), size=(dp(8), dp(8)))
                 self._flashes.append([col, el])
 
-            # KULLANICI ADI PANKARTI
             if self.username:
                 bw_p = min(w * 0.34, dp(320))
                 bh_p = max(dp(34), h * 0.07)
                 bx_p = x + w * 0.5 - bw_p / 2.0
                 by_p = y + ad_h + (h - ad_h) * 0.58
-                # gölge
                 Color(0, 0, 0, 0.35)
                 Rectangle(pos=(bx_p + dp(2), by_p - dp(2)), size=(bw_p, bh_p))
-                # beyaz zemin
                 Color(0.96, 0.96, 0.96, 1)
                 Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p))
-                # üst ve alt kırmızı şerit
                 Color(0.85, 0.10, 0.15, 1)
-                Rectangle(pos=(bx_p, by_p + bh_p - bh_p * 0.14), size=(bw_p, bh_p * 0.14))
+                Rectangle(pos=(bx_p, by_p + bh_p - bh_p * 0.14),
+                          size=(bw_p, bh_p * 0.14))
                 Rectangle(pos=(bx_p, by_p), size=(bw_p, bh_p * 0.14))
-                self._banner = (bx_p, by_p, bw_p, bh_p)
                 if self._banner_lbl is None:
                     self._banner_lbl = Label(
                         text=self.username.upper(), bold=True,
@@ -227,8 +230,5 @@ class CrowdWidget(Widget):
                 col.a *= 0.55
             elif random.random() < 0.012 + 0.03 * self.excite:
                 col.a = 1.0
-        # pankart sallanması
-        if self._banner_lbl and self._banner:
-            bx, by, bw_p, bh_p = self._banner
-            sway = math.sin(t * 1.8) * dp(3)
-            self._banner_lbl.pos = (bx + sway, by + abs(math.sin(t * 2.2)) * dp(2))
+        if self._banner_lbl:
+            self._banner_lbl.y += math.sin(t * 2.2) * 0.06

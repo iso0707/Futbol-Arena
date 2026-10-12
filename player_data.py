@@ -16,9 +16,6 @@ def slugify(text):
     return text or "player"
 
 
-# --------------------------------------------------------------------------
-# MAĞAZA: (isim, güç)
-# --------------------------------------------------------------------------
 _SHOP_RAW = [
     ("Lionel Messi", 100), ("Cristiano Ronaldo", 100), ("Pelé", 99),
     ("Diego Maradona", 98), ("Kylian Mbappé", 97), ("Erling Haaland", 96),
@@ -61,7 +58,6 @@ _SHOP_RAW = [
     ("Rüştü Reçber", 74),
 ]
 
-# ORTA SEVİYE futbolcular (güç ~35-48): fiyatlar 1500'den başlar.
 _MID_RAW = [
     ("Gökhan Töre", 36), ("Colin Kazim-Richards", 37), ("Ravel Morrison", 38),
     ("Mevlüt Erdinç", 39), ("Wilfried Bony", 40), ("Adel Taarabt", 40),
@@ -71,7 +67,6 @@ _MID_RAW = [
     ("Mario Balotelli", 48),
 ]
 
-# Wikipedia'da isim tek başına yanlış sayfaya gidiyorsa doğru başlık
 _WIKI = {
     "Ronaldo Nazário": "Ronaldo (Brazilian footballer)",
     "Rodri": "Rodri (footballer, born 1996)",
@@ -88,7 +83,6 @@ _WIKI = {
     "Mario Balotelli": "Mario Balotelli",
 }
 
-# Güç aralığı -> fiyat aralığı (isteğe göre)
 _BANDS = [
     (1, 20, 10, 300), (21, 34, 300, 1400), (36, 60, 1500, 2300),
     (61, 75, 1500, 2500), (76, 85, 2500, 3500), (86, 95, 3500, 4500),
@@ -104,21 +98,63 @@ def base_price(power):
     return 5000
 
 
+STARTER_CHOICES = [
+    ("Barış Alper Yılmaz", "Barış Alper Yılmaz"),
+    ("Mason Greenwood", "Mason Greenwood"),
+    ("Victor Osimhen", "Victor Osimhen"),
+    ("Leandro Trossard", "Leandro Trossard"),
+    ("Mohamed Salah", "Mohamed Salah"),
+    ("Dušan Vlahović", "Dušan Vlahović"),
+]
+_current_starter = [STARTER_CHOICES[0][0]]
+_starter_is_self = [False]
+
+
+def set_starter(name):
+    names = [n for n, _ in STARTER_CHOICES]
+    _current_starter[0] = name if name in names else STARTER_CHOICES[0][0]
+    _starter_is_self[0] = False
+    PLAYERS_BY_ID["starter"] = _starter_player()
+    for i, p in enumerate(SHOP_PLAYERS):
+        if p.id == "starter":
+            SHOP_PLAYERS[i] = PLAYERS_BY_ID["starter"]
+
+
+def set_starter_from_user():
+    _current_starter[0] = "KENDİM"
+    _starter_is_self[0] = True
+    PLAYERS_BY_ID["starter"] = Player("starter", "KENDİM", 10, 0, "")
+    for i, p in enumerate(SHOP_PLAYERS):
+        if p.id == "starter":
+            SHOP_PLAYERS[i] = PLAYERS_BY_ID["starter"]
+
+
+def starter_is_self():
+    return _starter_is_self[0]
+
+
+def _starter_player():
+    name = _current_starter[0]
+    if _starter_is_self[0]:
+        return Player("starter", "KENDİM", 10, 0, "")
+    wiki = dict(STARTER_CHOICES).get(name, name)
+    return Player("starter", name, 10, 0, wiki)
+
+
 def _build_shop():
     items = sorted(_SHOP_RAW + _MID_RAW, key=lambda r: (r[1], r[0]))
     out = []
     last = 0
     for name, power in items:
         if power >= 100:
-            price = 5000                      # Messi & Ronaldo: 5000
+            price = 5000
         else:
             price = base_price(power)
-            if price <= last:                 # her futbolcuya ayrı fiyat
+            if price <= last:
                 price = last + 5
             last = price
         out.append(Player(slugify(name), name, power, price, _WIKI.get(name, name)))
-    starter = Player("starter", "Barış Alper Yılmaz", 10, 0,
-                     "Barış Alper Yılmaz")             # ücretsiz başlangıç avatarı (güç 10)
+    starter = _starter_player()
     return [starter] + sorted(out, key=lambda p: (p.price, p.name))
 
 
@@ -131,15 +167,10 @@ def get_player(pid):
 
 
 def shot_success_chance(power):
-    """Kaleciyle aynı bölgeye atılmayan şutun isabet olasılığı.
-    Güç 1 -> ~%45, güç 100 -> %90 (asla garanti değil)."""
     power = max(1, min(100, int(power)))
     return 0.45 + 0.45 * (power / 100.0)
 
 
-# --------------------------------------------------------------------------
-# QUIZ HAVUZLARI: (isim, wikipedia başlığı veya None)
-# --------------------------------------------------------------------------
 _EASY_RAW = [
     ("Lionel Messi", None), ("Cristiano Ronaldo", None),
     ("Kylian Mbappé", None), ("Erling Haaland", None), ("Neymar", None),
@@ -206,9 +237,9 @@ HARD_POOL = _quiz(_HARD_RAW)
 
 
 def all_photo_items():
-    """Açılışta önceden indirilecek tüm fotoğraflar: (slug, wiki_başlığı, isim).
-    Başlangıç oyuncusu, mağaza ve quiz havuzları; aynı kişi tekrar eklenmez."""
     seen = {}
+    for name, wiki in STARTER_CHOICES:
+        seen.setdefault(slugify(name), (slugify(name), wiki, name))
     for p in SHOP_PLAYERS:
         if p.wiki:
             slug = slugify(p.name)
